@@ -116,7 +116,18 @@ Direct pixel prediction via ungrounded vision models (**Vanilla Baselines**) suf
 | **Fullscreen Video Toggle** | Embedded Media Player | Miss by 700.2px (clicked center) | **STRICT HIT (2.1px distance)** | Centroid button acquisition |
 | **Color Channel Spinbox Row** | Multi-channel RGB Controls | Complete coordinate hallucination | **STRICT HIT (2.5px distance)** | Targeted exact Down-Arrow control |
 
-### 3. Why the Droplet Paradigm Outperforms Raw Pixel Regression
+### 3. Model Weight Scaling & Parameter Dynamics
+
+> [!IMPORTANT]
+> **Performance Sensitivity to Model Weights and Scale**:
+> While Droplet AI's spatial grounding mesh dramatically elevates the baseline accuracy of any vision-language or reasoning model, **overall desktop execution capability, grounding recall, and complex multi-turn reasoning dynamically scale with model weight and parameter capacity**:
+> 
+> - **Frontier Heavyweight Models (e.g. Gemini 1.5 Pro, Claude 3.5 Sonnet, GPT-4o, Qwen 2.5 VL 72B)**: Provide superior visual OCR resolution, nuanced semantic discrimination between lookalike UI controls, and robust recovery from modal dialog distractors—achieving the top-tier **62%+** strict grounding benchmark.
+> - **Mid-to-Lightweight Models (e.g. 7B – 14B VLM / Qwen 2.5 VL 7B / Llama 3.2 11B Vision)**: Offer sub-second local inference and minimal memory overhead, but may exhibit lower grounding stability on sub-12px micro-icons, low-contrast buttons, or deeply nested toolbars (~35%–45% strict accuracy).
+> - **Quantization Impact (FP16 vs INT4/AWQ/GGUF)**: Low-bit quantized checkpoints (`int4`/`AWQ`/`GGUF`) can suffer degraded spatial attention and coordinate drift compared to full-precision weights (`FP16`/`BF16`).
+> - **Deterministic Zero-API Fallback (Pure OpenCV + OCR)**: Operates 100% offline at 2.6ms latency with zero API dependency, providing reliable standard widget detection (~17%–19%) for basic automations without high-capacity LLMs.
+
+### 4. Why the Droplet Paradigm Outperforms Raw Pixel Regression
 1. **Coordinate Discretization**: Vision models struggle with continuous float/pixel coordinate generation. Droplet AI projects high-contrast, numbered topological badges directly over interactive centroids, converting regression into an associative multiple-choice selection.
 2. **Contextual Distractor Elimination**: Candidate elements inside elevated modal dialogs receive priority containment scores, preventing the model from falling for background or cancel-button traps.
 3. **5-Stage CoT Deliberation**: The reasoner evaluates previous actions and visual motion feedback, systematically diagnosing misclicks and pivoting modalities within $\le 2$ turns.
@@ -134,7 +145,7 @@ Direct pixel prediction via ungrounded vision models (**Vanilla Baselines**) suf
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/<your-username>/droplet-ai.git
+git clone https://github.com/nandhak6197-a11y/droplet-ai.git
 cd droplet-ai
 
 # 2. Create and activate a virtual environment
@@ -207,6 +218,9 @@ pytest
 
 ---
 
-## License
+## 📄 License & Legal Notice
 
-This project is released under the **MIT License**. See [LICENSE](LICENSE) for details.
+Copyright © 2026 **Nandha K** ([`@nandhak6197-a11y`](https://github.com/nandhak6197-a11y)). All Rights Reserved.
+
+This project and its original implementations are released under the [MIT License](LICENSE).  
+You are free to use, modify, and distribute this software with proper author attribution in accordance with the license terms.
