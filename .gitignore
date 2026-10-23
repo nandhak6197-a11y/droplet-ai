@@ -5,6 +5,7 @@
 *.weights
 pipeline_verification_logs/
 diagnostic_200_results/
+*.log
 
 # Python cache & virtual environments
 __pycache__/
