@@ -1,0 +1,6 @@
+﻿index,id,instruction,image_path,error
+41,2ENZHM7E2X-0,"Close the ""Indexed Color Conversion"" dialog",2ENZHM7E2X.png,"ValueError('Expected 4 box values, got: [1197.26, 350.44, 1192.98, 357.56, 1192.98, 363.26, 1197.3, 369, 1208.7, 369, 1212.94, 363.26, 1212.94, 356.14, 1207.2, 350.4]')"
+49,8W1YGC8ZFK-2,"Close the Colorize dialog by click the ""x"" button",8W1YGC8ZFK.png,"ValueError('Expected 4 box values, got: [591.47, 558.54, 587.19, 564.24, 587.19, 572.8, 591.47, 579.92, 601.4, 579.9, 607.1, 574.2, 607.15, 565.67, 600.02, 558.54]')"
+55,AQZO503SQJ-0,"Click on the toggle button of ""Hot Corner"" to close the Hot Corner",AQZO503SQJ.png,"ValueError('Expected 4 box values, got: [1348.35, 267.76, 1339.8, 274.89, 1341.22, 287.72, 1349.78, 296.27, 1379.7, 296.3, 1389.69, 284.87, 1389.69, 274.89, 1379.71, 267.76]')"
+57,AQZO503SQJ-2,"Click on the toggle button of ""Active Screen Edges"" to close the Active Screen Edges",AQZO503SQJ.png,"ValueError('Expected 4 box values, got: [1346.93, 473.02, 1338.37, 480.15, 1338.37, 491.55, 1349.78, 500.1, 1382.56, 500.1, 1392.54, 492.98, 1391.11, 481.57, 1379.71, 473.02]')"
+69,GDZVK92HHZ-0,"Click on the question icon of the ""save"" dialog.",GDZVK92HHZ.png,"ValueError('Expected 4 box values, got: [735.43, 501.53, 724.03, 514.36, 724.03, 531.46, 736.86, 545.71, 758.24, 545.71, 771.07, 531.46, 771.07, 514.36, 756.81, 500.1]')"

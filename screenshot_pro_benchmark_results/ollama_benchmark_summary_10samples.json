@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Vanilla Kaggle Ollama Qwen 27B (No Droplets)",
+    "strict_pct": 0.0,
+    "tolerant_pct": 20.0,
+    "strict_count": 0,
+    "tolerant_count": 2,
+    "total_samples": 10,
+    "median_dist_px": 348.3,
+    "mean_latency_ms": 18167.9
+  },
+  {
+    "name": "Pure Droplet Engine (Zero API)",
+    "strict_pct": 40.0,
+    "tolerant_pct": 40.0,
+    "strict_count": 4,
+    "tolerant_count": 4,
+    "total_samples": 10,
+    "median_dist_px": 175.5,
+    "mean_latency_ms": 117.5
+  },
+  {
+    "name": "Kaggle Ollama Qwen 27B + Spatial Droplets",
+    "strict_pct": 90.0,
+    "tolerant_pct": 90.0,
+    "strict_count": 9,
+    "tolerant_count": 9,
+    "total_samples": 10,
+    "median_dist_px": 5.2,
+    "mean_latency_ms": 49975.3
+  },
+  {
+    "name": "Groq Qwen 27B + Spatial Droplets",
+    "strict_pct": 60.0,
+    "tolerant_pct": 60.0,
+    "strict_count": 6,
+    "tolerant_count": 6,
+    "total_samples": 10,
+    "median_dist_px": 13.6,
+    "mean_latency_ms": 8038.3
+  }
+]

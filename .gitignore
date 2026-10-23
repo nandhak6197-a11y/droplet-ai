@@ -1,0 +1,27 @@
+# Model checkpoints & large binary weights (>100MB)
+*.pth
+*.pt
+*.bin
+*.weights
+pipeline_verification_logs/
+diagnostic_200_results/
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Teamwork internal multi-agent workspaces
+.agents/
+
+# Secrets & Environment
+.env
+*.env
+.groq_keys
+*.keys
+*.pem
+*.key

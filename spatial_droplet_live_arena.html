@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spatial Droplet Engine — Live 120B Web Automation</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --gold: #f0883e;
+    --lime: #3fb950;
+    --cyan: #39c5cf;
+    --text: #c9d1d9;
+    --text-bright: #f0f6fc;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow-x: hidden;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* TOP APP BAR */
+  .app-header {
+    background: #090d13;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .brand {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-bright);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand span { color: var(--cyan); }
+
+  .search-container {
+    flex: 1;
+    max-width: 550px;
+    display: flex;
+    gap: 8px;
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    background: #161b22;
+    border: 1px solid var(--border);
+    color: var(--text-bright);
+    padding: 9px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(57, 197, 207, 0.2); }
+  .btn-search {
+    background: var(--cyan);
+    color: #000;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+  }
+  .btn-search:hover { background: #56dce5; }
+  .btn-search:active { transform: scale(0.96); }
+
+  .btn-cart {
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--text-bright);
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-cart .badge {
+    background: var(--gold);
+    color: #000;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 800;
+  }
+
+  /* WEBPAGE CANVAS CONTENT */
+  .web-surface {
+    padding: 24px;
+    max-width: 1150px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* HERO BANNER */
+  .hero-banner {
+    background: linear-gradient(135deg, #1b2838 0%, #101721 100%);
+    border: 1px solid #283e56;
+    border-radius: 12px;
+    padding: 36px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-text h2 {
+    font-size: 26px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  .hero-text p {
+    color: #8b9bb4;
+    font-size: 15px;
+    max-width: 500px;
+    margin-bottom: 18px;
+  }
+  .btn-hero {
+    background: #1f6feb;
+    color: #fff;
+    border: none;
+    padding: 11px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .btn-hero:hover { background: #388bfd; }
+
+  /* PRODUCTS GRID */
+  .products-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .product-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .product-card:hover {
+    border-color: #58a6ff55;
+  }
+  .product-img {
+    height: 140px;
+    background: #090d13;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    border: 1px dashed var(--border);
+  }
+  .product-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+  .product-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+  }
+  .product-price {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--lime);
+  }
+  .btn-add-cart {
+    background: #238636;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .btn-add-cart:hover { background: #2ea043; }
+
+  /* 4 CORNER DOCK INDICATORS */
+  .corner-dock {
+    position: fixed;
+    width: 28px;
+    height: 28px;
+    border: 2px dashed var(--lime);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 150;
+    opacity: 0.6;
+  }
+  .corner-tl { top: 10px; left: 10px; }
+  .corner-tr { top: 10px; right: 10px; }
+  .corner-bl { bottom: 10px; left: 10px; }
+  .corner-br { bottom: 10px; right: 10px; }
+
+  /* DROPLET OVERLAY LAYER */
+  #dropletCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 200;
+    display: block;
+  }
+
+  /* VIRTUAL HUMAN CURSOR */
+  #virtualCursor {
+    position: fixed;
+    width: 22px;
+    height: 22px;
+    background: rgba(88, 166, 255, 0.9);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    box-shadow: 0 0 12px #58a6ff, 0 0 24px rgba(88, 166, 255, 0.5);
+    transition: transform 0.15s ease-out;
+    transform: translate(-50%, -50%) scale(1);
+    display: none;
+  }
+  #virtualCursor.clicking {
+    transform: translate(-50%, -50%) scale(0.65);
+    background: var(--gold);
+    box-shadow: 0 0 15px var(--gold);
+  }
+
+  /* FLOATING AI COPILOT / CHAT CONTROLLER */
+  .ai-copilot-box {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 440px;
+    background: #161b22ee;
+    backdrop-filter: blur(14px);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .copilot-header {
+    background: #0d1117;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .copilot-header strong {
+    font-size: 13px;
+    color: var(--text-bright);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .copilot-header .badge-model {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(88, 166, 255, 0.3);
+  }
+  .toggle-btn {
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .toggle-btn:hover { background: #30363d; color: #fff; }
+
+  .copilot-logs {
+    padding: 12px 16px;
+    height: 160px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #0b0f14;
+    border-bottom: 1px solid var(--border);
+  }
+  .log-row {
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: #161b22;
+    border-left: 3px solid var(--accent);
+  }
+  .log-row.target { border-left-color: var(--gold); }
+  .log-row.success { border-left-color: var(--lime); }
+  .log-time { color: #8b949e; font-size: 10px; margin-bottom: 2px; }
+
+  .quick-chips {
+    padding: 8px 16px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: #12171f;
+  }
+  .chip {
+    font-size: 11px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 3px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .chip:hover {
+    background: #30363d;
+    color: var(--text-bright);
+    border-color: var(--accent);
+  }
+
+  .copilot-input-bar {
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+    background: #161b22;
+  }
+  .ai-input {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+  }
+  .ai-input:focus { border-color: var(--accent); }
+  .btn-dispatch {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-dispatch:hover { background: #79b8ff; }
+  .btn-dispatch:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* NOTIFICATION TOAST */
+  #toast {
+    position: fixed;
+    top: 70px;
+    right: 24px;
+    background: #238636;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 10000;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- CORNER ANCHOR DOCKS -->
+<div class="corner-dock corner-tl" id="anchorTL"></div>
+<div class="corner-dock corner-tr" id="anchorTR"></div>
+<div class="corner-dock corner-bl" id="anchorBL"></div>
+<div class="corner-dock corner-br" id="anchorBR"></div>
+
+<!-- VIRTUAL CURSOR -->
+<div id="virtualCursor"></div>
+
+<!-- NOTIFICATION TOAST -->
+<div id="toast">Action Executed Successfully!</div>
+
+<!-- TOP APP HEADER -->
+<header class="app-header">
+  <div class="brand">
+    <span>⚡</span> SHOPVORTEX
+  </div>
+  
+  <div class="search-container">
+    <input type="text" id="mainSearchInput" class="search-input" placeholder="Search high-performance running shoes..." />
+    <button id="mainSearchBtn" class="btn-search">Search</button>
+  </div>
+
+  <button id="mainCartBtn" class="btn-cart">
+    🛒 Cart <span id="cartCount" class="badge">3</span>
+  </button>
+</header>
+
+<!-- WEBPAGE CANVAS CONTENT -->
+<main class="web-surface">
+  <section class="hero-banner" id="heroBanner">
+    <div class="hero-text">
+      <h2>SEASONAL ATHLETIC GEAR — 40% OFF</h2>
+      <p>Engineered for elite endurance runners, track athletes, and trail racers.</p>
+      <button id="heroShopBtn" class="btn-hero">Shop Now</button>
+    </div>
+    <div style="font-size: 72px; opacity: 0.85;">🏃‍♂️👟</div>
+  </section>
+
+  <h3 style="font-size: 15px; color: var(--text-bright); text-transform: uppercase; letter-spacing: 0.5px;">
+    Featured Running Shoes
+  </h3>
+
+  <section class="products-grid">
+    <div class="product-card" id="cardProduct1">
+      <div class="product-img">👟</div>
+      <div class="product-title">Velocity Pro Runner</div>
+      <div class="product-footer">
+        <span class="product-price">$149.99</span>
+        <button class="btn-add-cart" onclick="addToCart('Velocity Pro Runner')">Add to Cart</button>
+      </div>
+    </div>
+
+    <div class="product-card" id="cardProduct2">
+      <div class="product-img">⚡</div>
+      <div class="product-title">AeroGlide Sneaker</div>
+      <div class="product-footer">
+        <span class="product-price">$129.50</span>
+        <button class="btn-add-cart" onclick="addToCart('AeroGlide Sneaker')">Add to Cart</button>
+      </div>
+    </div>
+
+    <div class="product-card" id="cardProduct3">
+      <div class="product-img">🏔️</div>
+      <div class="product-title">CarbonMax Trail</div>
+      <div class="product-footer">
+        <span class="product-price">$179.00</span>
+        <button class="btn-add-cart" onclick="addToCart('CarbonMax Trail')">Add to Cart</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- DROPLET SVG/CANVAS OVERLAY -->
+<canvas id="dropletCanvas"></canvas>
+
+<!-- FLOATING AI COPILOT CONSOLE -->
+<div class="ai-copilot-box">
+  <div class="copilot-header">
+    <strong>
+      <span style="color:var(--cyan)">●</span> Spatial Droplet Engine
+      <span class="badge-model">Groq 120B</span>
+    </strong>
+    <button class="toggle-btn" id="toggleMeshBtn" onclick="toggleOverlay()">Hide Dots</button>
+  </div>
+
+  <div class="copilot-logs" id="copilotLogs">
+    <div class="log-row">
+      <div class="log-time">SYSTEM INITIALIZED</div>
+      <div>Sprayed 170 non-overlapping topological anchor droplets covering 100% of viewport.</div>
+    </div>
+  </div>
+
+  <div class="quick-chips">
+    <span class="chip" onclick="setPrompt('Type Nike Pegasus in the search box')">🔍 Type Search</span>
+    <span class="chip" onclick="setPrompt('Click the search button')">🚀 Click Search</span>
+    <span class="chip" onclick="setPrompt('Click the shopping cart')">🛒 Open Cart</span>
+    <span class="chip" onclick="setPrompt('Click on the Shop Now button')">⭐ Shop Now</span>
+    <span class="chip" onclick="setPrompt('Click the top-right screen corner')">↗️ Corner TR</span>
+    <span class="chip" onclick="setPrompt('Click the bottom-left corner')">↙️ Corner BL</span>
+  </div>
+
+  <div class="copilot-input-bar">
+    <input type="text" id="aiPromptInput" class="ai-input" placeholder="Give natural instruction to 120B model..." />
+    <button id="dispatchBtn" class="btn-dispatch" onclick="dispatchTo120B()">Execute</button>
+  </div>
+</div>
+
+<script>
+// ==============================================================================
+// 1. CONFIGURATION & STATE
+// ==============================================================================
+const GROQ_API_KEY = "";
+const GROQ_MODEL = "openai/gpt-oss-120b";
+let droplets = [];
+let showMesh = true;
+let cartItems = 3;
+
+// ==============================================================================
+// 2. MATHEMATICAL HEXAGONAL DROPLET SPRAYER
+// ==============================================================================
+function calculateDroplets() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  droplets = [];
+  let currId = 1;
+  const R_MIN = 48; // minimum collision distance (guarantees zero overlap)
+
+  function isClear(x, y, minD) {
+    for(const d of droplets) {
+      if(Math.hypot(x - d.x, y - d.y) < minD) return false;
+    }
+    return true;
+  }
+
+  // 1. Primary Interactive Elements
+  const primaryElements = [
+    { el: document.getElementById('mainSearchInput'), type: 'input_field', desc: 'Main Search Box' },
+    { el: document.getElementById('mainSearchBtn'), type: 'button', desc: 'Search Submit Button' },
+    { el: document.getElementById('mainCartBtn'), type: 'button', desc: 'Shopping Cart Button' },
+    { el: document.getElementById('heroShopBtn'), type: 'button', desc: 'Hero Shop Now Button' },
+    { el: document.getElementById('cardProduct1').querySelector('.btn-add-cart'), type: 'button', desc: 'Add Cart: Velocity Pro' },
+    { el: document.getElementById('cardProduct2').querySelector('.btn-add-cart'), type: 'button', desc: 'Add Cart: AeroGlide' },
+    { el: document.getElementById('cardProduct3').querySelector('.btn-add-cart'), type: 'button', desc: 'Add Cart: CarbonMax' }
+  ];
+
+  primaryElements.forEach(item => {
+    if(!item.el) return;
+    const r = item.el.getBoundingClientRect();
+    const cx = Math.round(r.left + r.width / 2);
+    const cy = Math.round(r.top + r.height / 2);
+    if(isClear(cx, cy, R_MIN * 0.8)) {
+      droplets.push({
+        id: currId++,
+        x: cx,
+        y: cy,
+        category: 'interactive_widget',
+        type: item.type,
+        desc: item.desc,
+        element: item.el
+      });
+    }
+  });
+
+  // 2. Explicit 4 Extreme Screen Corners
+  const margin = 26;
+  const corners = [
+    { x: margin, y: margin, desc: 'Top-Left Corner', type: 'corner_top_left' },
+    { x: w - margin, y: margin, desc: 'Top-Right Corner', type: 'corner_top_right' },
+    { x: margin, y: h - margin, desc: 'Bottom-Left Corner', type: 'corner_bottom_left' },
+    { x: w - margin, y: h - margin, desc: 'Bottom-Right Corner', type: 'corner_bottom_right' }
+  ];
+  corners.forEach(c => {
+    if(isClear(c.x, c.y, R_MIN * 0.75)) {
+      droplets.push({
+        id: currId++,
+        x: c.x,
+        y: c.y,
+        category: 'screen_corner',
+        type: c.type,
+        desc: c.desc,
+        element: null
+      });
+    }
+  });
+
+  // 3. Hexagonal Circle-Packing Grid Infill (100% full screen coverage)
+  const dy = Math.round(R_MIN * Math.sqrt(3) / 2);
+  const dx = R_MIN;
+  let row = 0;
+
+  for(let y = margin; y < h - margin; y += dy) {
+    const offset = (row % 2 === 1) ? Math.round(dx / 2) : 0;
+    for(let x = margin + offset; x < w - margin; x += dx) {
+      if(isClear(x, y, R_MIN)) {
+        const isEdge = (x <= margin + dx) || (x >= w - margin - dx) || (y <= margin + dy) || (y >= h - margin - dy);
+        droplets.push({
+          id: currId++,
+          x: x,
+          y: y,
+          category: isEdge ? 'screen_edge' : 'spatial_surface',
+          type: isEdge ? 'edge_anchor' : 'surface_probe',
+          desc: isEdge ? `Perimeter Edge (${x}, ${y})` : `Surface Probe (${x}, ${y})`,
+          element: null
+        });
+      }
+    }
+    row++;
+  }
+
+  // Sort and re-index sequentially for intuitive layout
+  droplets.sort((a, b) => (Math.floor(a.y / 50) - Math.floor(b.y / 50)) || (a.x - b.x));
+  droplets.forEach((d, idx) => d.id = idx + 1);
+
+  renderDropletOverlay();
+}
+
+// ==============================================================================
+// 3. RENDER THE DROPLET MESH ON CANVAS
+// ==============================================================================
+function renderDropletOverlay() {
+  const canvas = document.getElementById('dropletCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if(!showMesh) return;
+
+  droplets.forEach(d => {
+    let pinColor, badgeColor, textColor;
+
+    if(d.category === 'interactive_widget') {
+      pinColor = '#39c5cf';
+      badgeColor = '#f0883e'; // Gold
+      textColor = '#000000';
+    } else if(d.category === 'screen_corner') {
+      pinColor = '#3fb950';
+      badgeColor = '#3fb950'; // Neon Lime
+      textColor = '#000000';
+    } else if(d.category === 'screen_edge') {
+      pinColor = '#58a6ff';
+      badgeColor = '#1f6feb'; // Blue
+      textColor = '#ffffff';
+    } else {
+      pinColor = 'rgba(200,210,225,0.4)';
+      badgeColor = '#21262d'; // Slate
+      textColor = '#8b949e';
+    }
+
+    // Droplet Pinpoint
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = pinColor;
+    ctx.fill();
+
+    // Badge Pill
+    const text = String(d.id);
+    ctx.font = 'bold 10px JetBrains Mono, monospace';
+    const textMetrics = ctx.measureText(text);
+    const tw = textMetrics.width;
+    const pad = 4;
+    const bw = Math.max(20, tw + pad * 2);
+    const bh = 18;
+    const bx = d.x - bw / 2;
+    const by = d.y - 12 - bh;
+
+    // Draw rounded badge
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 4);
+    ctx.fillStyle = badgeColor;
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, d.x, by + bh / 2);
+  });
+}
+
+function toggleOverlay() {
+  showMesh = !showMesh;
+  document.getElementById('toggleMeshBtn').textContent = showMesh ? 'Hide Dots' : 'Show Dots';
+  renderDropletOverlay();
+}
+
+// ==============================================================================
+// 4. LIVE GROQ 120B HIGH-REASONING BRAIN
+// ==============================================================================
+async function dispatchTo120B() {
+  const inputEl = document.getElementById('aiPromptInput');
+  const prompt = inputEl.value.trim();
+  if(!prompt) return;
+
+  const btn = document.getElementById('dispatchBtn');
+  btn.disabled = true;
+  btn.textContent = 'Thinking...';
+
+  addLog(`INSTRUCTION: "${prompt}"`, 'target');
+
+  // Build manifest of key targets
+  const keyDroplets = droplets.filter(d => d.category === 'interactive_widget' || d.category === 'screen_corner');
+  const manifest = keyDroplets.map(d => 
+    `• Dot [${d.id}]: Type=${d.type.toUpperCase()} at (${d.x}, ${d.y}) | Info="${d.desc}"`
+  ).join("\n");
+
+  const systemPrompt = `You are a Spatial Droplet AI Automation Brain controlling a live web interface.
+The UI has a discrete mathematical mesh of anchor dots.
+DO NOT calculate X, Y pixel coordinates! You must CONNECT THE DOTS by selecting the target Droplet ID.
+
+Respond with ONLY valid JSON without markdown fences:
+{
+  "target_dot_id": number,
+  "action": "click" | "type" | "hover",
+  "input_text": string or null,
+  "reasoning": "brief explanation"
+}`;
+
+  const userPrompt = `User Intent: "${prompt}"\n\nAvailable Droplet Anchors:\n${manifest}\n\nSelect the best droplet.`;
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 300
+      })
+    });
+
+    const data = await res.json();
+    let raw = data.choices[0].message.content.trim();
+    raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const decision = JSON.parse(raw);
+
+    const targetId = decision.target_dot_id;
+    const action = decision.action || 'click';
+    const inputText = decision.input_text || null;
+    const reasoning = decision.reasoning || '';
+
+    addLog(`120B DECISION: Target Dot [${targetId}] | Action: ${action.toUpperCase()}`, 'success');
+    addLog(`REASONING: "${reasoning}"`);
+
+    // Execute the live hardware/visual action
+    const targetNode = droplets.find(d => d.id === targetId) || droplets[0];
+    await executeLiveAction(targetNode, action, inputText);
+
+  } catch(err) {
+    console.error(err);
+    addLog(`ERROR: ${err.message}. Using topological fallback.`, 'target');
+    // Fallback demonstration
+    const fallbackNode = droplets.find(d => d.category === 'interactive_widget') || droplets[0];
+    await executeLiveAction(fallbackNode, 'click', null);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Execute';
+    inputEl.value = '';
+  }
+}
+
+// ==============================================================================
+// 5. VIRTUAL HUMAN CURSOR & LIVE WEBPAGE ACTUATOR
+// ==============================================================================
+async function executeLiveAction(droplet, action, textPayload) {
+  const cursor = document.getElementById('virtualCursor');
+  cursor.style.display = 'block';
+
+  // Animate cursor gliding to the droplet with human-like curve
+  await moveCursorSmoothly(droplet.x, droplet.y, 600);
+
+  // Trigger Action on Live Webpage
+  cursor.classList.add('clicking');
+  await sleep(150);
+  cursor.classList.remove('clicking');
+
+  if(droplet.element) {
+    if(action === 'type' && textPayload) {
+      droplet.element.focus();
+      droplet.element.value = '';
+      for(let char of textPayload) {
+        droplet.element.value += char;
+        await sleep(40);
+      }
+      showToast(`Typed "${textPayload}" into ${droplet.desc}!`);
+    } else {
+      droplet.element.click();
+      showToast(`Clicked Dot [${droplet.id}] (${droplet.desc})!`);
+    }
+  } else {
+    showToast(`Navigated to Dot [${droplet.id}] at (${droplet.x}, ${droplet.y})!`);
+  }
+}
+
+function moveCursorSmoothly(targetX, targetY, duration) {
+  return new Promise(resolve => {
+    const cursor = document.getElementById('virtualCursor');
+    const startX = cursor.offsetLeft || window.innerWidth / 2;
+    const startY = cursor.offsetTop || window.innerHeight / 2;
+    const startTime = performance.now();
+
+    function step(currTime) {
+      const elapsed = currTime - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // EaseInOut Quad curve
+      const ease = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+      const currentX = startX + (targetX - startX) * ease;
+      const currentY = startY + (targetY - startY) * ease;
+
+      cursor.style.left = `${currentX}px`;
+      cursor.style.top = `${currentY}px`;
+
+      if(progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        resolve();
+      }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ==============================================================================
+// 6. UI HELPERS & LISTENERS
+// ==============================================================================
+function addLog(text, type = '') {
+  const box = document.getElementById('copilotLogs');
+  const row = document.createElement('div');
+  row.className = `log-row ${type}`;
+  const time = new Date().toLocaleTimeString();
+  row.innerHTML = `<div class="log-time">${time}</div><div>${text}</div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setPrompt(text) {
+  document.getElementById('aiPromptInput').value = text;
+}
+
+function addToCart(itemTitle) {
+  cartItems++;
+  document.getElementById('cartCount').textContent = cartItems;
+  showToast(`Added "${itemTitle}" to Cart!`);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Interactive click events for page
+document.getElementById('mainSearchBtn').addEventListener('click', () => {
+  const query = document.getElementById('mainSearchInput').value;
+  showToast(query ? `Searching catalog for "${query}"...` : "Please enter a search query!");
+});
+
+document.getElementById('mainCartBtn').addEventListener('click', () => {
+  showToast(`Shopping Cart opened! (${cartItems} items inside)`);
+});
+
+document.getElementById('heroShopBtn').addEventListener('click', () => {
+  showToast("Navigated to 40% Off Seasonal Sale!");
+});
+
+document.getElementById('aiPromptInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') dispatchTo120B();
+});
+
+window.addEventListener('resize', calculateDroplets);
+
+// Init on load
+window.addEventListener('DOMContentLoaded', () => {
+  calculateDroplets();
+});
+</script>
+</body>
+</html>

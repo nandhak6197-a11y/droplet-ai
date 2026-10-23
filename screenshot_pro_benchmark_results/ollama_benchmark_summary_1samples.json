@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Kaggle Ollama 0000/ui-tars-1.5-7b:latest + Spatial Droplets",
+    "strict_pct": 100.0,
+    "tolerant_pct": 100.0,
+    "strict_count": 1,
+    "tolerant_count": 1,
+    "total_samples": 1,
+    "median_dist_px": 2.0,
+    "mean_latency_ms": 12415.3
+  }
+]

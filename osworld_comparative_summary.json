@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Default GPT-OSS 20B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 298.9,
+    "mean_latency": 2308.0
+  },
+  {
+    "name": "Default GPT-OSS 120B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 224.9,
+    "mean_latency": 583.7
+  },
+  {
+    "name": "Default Qwen 3.8 27B Vision (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 732.9,
+    "mean_latency": 618.9
+  },
+  {
+    "name": "GPT-OSS 20B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 46.5,
+    "mean_latency": 892.0
+  },
+  {
+    "name": "GPT-OSS 120B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 46.5,
+    "mean_latency": 2791.9
+  },
+  {
+    "name": "Qwen 3.8 27B (Multimodal) + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 46.5,
+    "mean_latency": 3545.6
+  },
+  {
+    "name": "Pure Droplet Engine (Zero API Call)",
+    "type": "spatial",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "median_dist": 609.7,
+    "mean_latency": 2.6
+  }
+]

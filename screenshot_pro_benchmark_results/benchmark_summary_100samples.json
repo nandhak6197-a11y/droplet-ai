@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Pure Droplet Engine (Zero API)",
+    "type": "spatial",
+    "strict_pct": 17.0,
+    "tolerant_pct": 19.0,
+    "strict_count": 17,
+    "tolerant_count": 19,
+    "total_samples": 100,
+    "median_dist_px": 560.8,
+    "mean_latency_ms": 386.1
+  },
+  {
+    "name": "Default Qwen 3.8 27B Vision (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 100,
+    "median_dist_px": 999.0,
+    "mean_latency_ms": 3592.4
+  },
+  {
+    "name": "Qwen 3.8 27B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 42.0,
+    "tolerant_pct": 45.0,
+    "strict_count": 42,
+    "tolerant_count": 45,
+    "total_samples": 100,
+    "median_dist_px": 113.9,
+    "mean_latency_ms": 20372.0
+  },
+  {
+    "name": "Kaggle Dual-T4 Qwen (Multimodal) + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 42.0,
+    "tolerant_pct": 45.0,
+    "strict_count": 42,
+    "tolerant_count": 45,
+    "total_samples": 100,
+    "median_dist_px": 111.0,
+    "mean_latency_ms": 20558.5
+  }
+]

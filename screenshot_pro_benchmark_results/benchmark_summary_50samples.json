@@ -1,0 +1,57 @@
+[
+  {
+    "name": "Default Qwen 3.8 27B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 50,
+    "median_dist_px": 645.4,
+    "mean_latency_ms": 9515.8
+  },
+  {
+    "name": "Default GPT-OSS 120B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 50,
+    "median_dist_px": 456.6,
+    "mean_latency_ms": 1992.4
+  },
+  {
+    "name": "Pure Droplet Engine (Zero API)",
+    "type": "spatial",
+    "strict_pct": 20.0,
+    "tolerant_pct": 22.0,
+    "strict_count": 10,
+    "tolerant_count": 11,
+    "total_samples": 50,
+    "median_dist_px": 674.3,
+    "mean_latency_ms": 27.9
+  },
+  {
+    "name": "GPT-OSS 120B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 26.0,
+    "tolerant_pct": 30.0,
+    "strict_count": 13,
+    "tolerant_count": 15,
+    "total_samples": 50,
+    "median_dist_px": 283.4,
+    "mean_latency_ms": 3306.8
+  },
+  {
+    "name": "Qwen 3.8 27B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 36.0,
+    "tolerant_pct": 40.0,
+    "strict_count": 18,
+    "tolerant_count": 20,
+    "total_samples": 50,
+    "median_dist_px": 170.3,
+    "mean_latency_ms": 18069.9
+  }
+]

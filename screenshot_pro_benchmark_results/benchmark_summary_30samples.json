@@ -1,0 +1,57 @@
+[
+  {
+    "name": "Default Llama3 8B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 30,
+    "median_dist_px": 999.0,
+    "mean_latency_ms": 3491.8
+  },
+  {
+    "name": "Default Llama3 70B (No Droplets)",
+    "type": "vanilla",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 30,
+    "median_dist_px": 430.8,
+    "mean_latency_ms": 1701.9
+  },
+  {
+    "name": "Pure Droplet Engine (Zero API)",
+    "type": "spatial",
+    "strict_pct": 36.7,
+    "tolerant_pct": 36.7,
+    "strict_count": 11,
+    "tolerant_count": 11,
+    "total_samples": 30,
+    "median_dist_px": 339.5,
+    "mean_latency_ms": 124.4
+  },
+  {
+    "name": "Llama3 70B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 13.3,
+    "tolerant_pct": 13.3,
+    "strict_count": 4,
+    "tolerant_count": 4,
+    "total_samples": 30,
+    "median_dist_px": 999.0,
+    "mean_latency_ms": 5807.1
+  },
+  {
+    "name": "Llama3 8B + Spatial Droplets",
+    "type": "spatial",
+    "strict_pct": 0.0,
+    "tolerant_pct": 0.0,
+    "strict_count": 0,
+    "tolerant_count": 0,
+    "total_samples": 30,
+    "median_dist_px": 999.0,
+    "mean_latency_ms": 2418.6
+  }
+]

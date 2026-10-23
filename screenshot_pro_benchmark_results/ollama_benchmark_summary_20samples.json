@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Kaggle Ollama qwen3-vl:30b-a3b-thinking + Spatial Droplets",
+    "strict_pct": 65.0,
+    "tolerant_pct": 65.0,
+    "strict_count": 13,
+    "tolerant_count": 13,
+    "total_samples": 20,
+    "median_dist_px": 28.9,
+    "mean_latency_ms": 28373.2
+  }
+]

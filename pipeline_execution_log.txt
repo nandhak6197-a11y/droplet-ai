@@ -1,0 +1,45 @@
+=================================================================
+   OVARIAN HISTOPATHOLOGY SWIN-CONVNEXT PIPELINE VERIFICATION   
+=================================================================
+[*] Execution Device: cpu
+[+] Step 1: Testing Wavelet BEMD-inspired Enhancement...
+    Enhancement successful! Input shape: (224, 224) -> Enhanced: (224, 224)
+[+] Step 2: Dataloaders initialized successfully.
+[+] Step 3: Constructing Model Architecture...
+    Loading test backbones (Swin-Tiny + ConvNeXt-Tiny for local verification)...
+    Model initialized successfully!
+
+========================================
+     STAGE 1: WARMUP TEST (FROZEN BACKBONES)
+========================================
+Stage 1 Warmup:  12%|#2        | 1/8 [00:01<00:12,  1.73s/it, loss=1.6122, acc=50.0%]
+Stage 1 Warmup:  25%|##5       | 2/8 [00:03<00:09,  1.65s/it, loss=1.5966, acc=37.5%]
+Stage 1 Warmup:  38%|###7      | 3/8 [00:04<00:07,  1.59s/it, loss=1.7630, acc=25.0%]
+Stage 1 Warmup:  50%|#####     | 4/8 [00:06<00:05,  1.46s/it, loss=1.6215, acc=25.0%]
+Stage 1 Warmup:  62%|######2   | 5/8 [00:08<00:04,  1.66s/it, loss=1.6631, acc=25.0%]
+Stage 1 Warmup:  75%|#######5  | 6/8 [00:09<00:03,  1.70s/it, loss=1.5273, acc=29.2%]
+Stage 1 Warmup:  88%|########7 | 7/8 [00:11<00:01,  1.63s/it, loss=1.6038, acc=28.6%]
+Stage 1 Warmup: 100%|##########| 8/8 [00:12<00:00,  1.61s/it, loss=1.7072, acc=25.0%]
+[OK] Stage 1 Warmup Finished! Loss: 1.6368, Accuracy: 25.0%
+    >>> PROOF: Stage 1 does NOT freeze when properly configured!
+
+========================================
+     STAGE 2: FINE-TUNING TEST (UNFROZEN)
+========================================
+Stage 2 Fine-Tune:  12%|#2        | 1/8 [00:05<00:38,  5.49s/it, loss=1.6018, acc=25.0%]
+Stage 2 Fine-Tune:  25%|##5       | 2/8 [00:11<00:36,  6.04s/it, loss=2.3406, acc=12.5%]
+Stage 2 Fine-Tune:  38%|###7      | 3/8 [00:17<00:29,  5.91s/it, loss=1.4642, acc=25.0%]
+Stage 2 Fine-Tune:  50%|#####     | 4/8 [00:22<00:22,  5.67s/it, loss=1.8146, acc=18.8%]
+Stage 2 Fine-Tune:  62%|######2   | 5/8 [00:28<00:16,  5.58s/it, loss=1.7555, acc=15.0%]
+Stage 2 Fine-Tune:  75%|#######5  | 6/8 [00:33<00:11,  5.50s/it, loss=1.7201, acc=16.7%]
+Stage 2 Fine-Tune:  88%|########7 | 7/8 [00:39<00:05,  5.51s/it, loss=1.5873, acc=17.9%]
+Stage 2 Fine-Tune: 100%|##########| 8/8 [00:45<00:00,  5.66s/it, loss=1.5664, acc=18.8%]
+[OK] Stage 2 Fine-Tuning Finished! Loss: 1.7313, Accuracy: 18.8%
+
+[+] Step 6: Testing Validation Routine...
+[OK] Validation Finished! Loss: 1.6463, Acc: 18.8%
+[OK] Checkpoint safely written to: ./pipeline_verification_logs\test_ovarian_checkpoint.pth
+
+=================================================================
+       ALL PIPELINE STAGES PASSED 100% SUCCESSFULLY!        
+=================================================================
