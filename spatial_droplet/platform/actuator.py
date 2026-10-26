@@ -1035,6 +1035,33 @@ class PrecisionActuator:
             if app_to_launch:
                 app_clean = app_to_launch.strip()
                 print(f"[Actuator] [Launch App]: '{app_clean}'")
+
+                # Guard 1: Reject numbers, math expressions, and single punctuation
+                is_formula = bool(re.search(r'\d+\s*[\+\-\*\/]\s*\d+', app_clean)) or any(op in app_clean for op in ("+", "*", "=", "/", "<", ">"))
+                if app_clean.isdigit() or is_formula or (len(app_clean) <= 2 and not app_clean.isalpha()):
+                    return {
+                        "verified": False,
+                        "error": f"Invalid application name '{app_clean}'",
+                        "reason": f"Cannot launch '{app_clean}' as application. For typing numbers or text into active windows, use 'type' action.",
+                        "type": "INVALID_ACTION"
+                    }
+
+                # Guard 2: Enforce that LAUNCH_APP is ONLY used when not already in foreground
+                if win_ctx and win_ctx.is_valid and win_ctx.title != "Desktop":
+                    win_t = win_ctx.title.lower()
+                    app_low = app_clean.lower()
+                    from ..reasoning.awareness_router import AwarenessRouter
+                    known_aliases = AwarenessRouter.KNOWN_APPS.get(app_low, [app_low])
+                    is_already_active = any(alias in win_t for alias in known_aliases if len(alias) >= 3) or (app_low in win_t)
+                    if is_already_active:
+                        print(f"[Actuator] [Launch App]: Application '{app_clean}' is ALREADY in foreground window '{win_ctx.title}'!")
+                        return {
+                            "verified": False,
+                            "error": f"Application '{app_clean}' is already in foreground",
+                            "reason": f"Application '{app_clean}' already active in foreground window '{win_ctx.title}'. Dispatch 'type' or in-window controls instead.",
+                            "type": "ALREADY_ACTIVE"
+                        }
+
                 try:
                     # Try ShellExecuteW directly
                     launched = False
@@ -1063,8 +1090,18 @@ class PrecisionActuator:
                                 pass
 
                     if not launched:
-                        subprocess.Popen(app_clean, shell=True)
-                        launched = True
+                        import shutil
+                        cmd_head = app_clean.split()[0]
+                        if shutil.which(cmd_head) or app_clean.endswith(".exe"):
+                            subprocess.Popen(app_clean, shell=True)
+                            launched = True
+                        else:
+                            return {
+                                "verified": False,
+                                "error": f"Command or application '{app_clean}' not found on system",
+                                "reason": f"Application executable '{app_clean}' is not recognized or available.",
+                                "type": "EXECUTION_ERROR"
+                            }
 
                     time.sleep(0.5)
                     return {"verified": True, "reason": f"Launched application '{app_clean}'", "type": "PROCESS_LAUNCH"}
@@ -1073,6 +1110,7 @@ class PrecisionActuator:
                     return {"verified": False, "error": str(e), "reason": f"Failed to launch '{app_clean}': {e}", "type": "EXECUTION_ERROR"}
             else:
                 return {"verified": False, "error": "Empty application name provided", "reason": "No application specified to launch", "type": "EXECUTION_ERROR"}
+
 
         elif act_clean in ('open_path', 'system_open', 'system_open_path'):
             path_to_open = input_text or kwargs.get('path', '') or kwargs.get('target', '') or kwargs.get('app', '')

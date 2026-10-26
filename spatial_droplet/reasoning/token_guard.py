@@ -98,6 +98,90 @@ class TokenBudgetGuard:
         total += 3  # Assistant response priming overhead
         return total
 
+    DELIBERATION_MAX_TOKENS: int = 400
+
+    @classmethod
+    def cap_deliberation(cls, delib: Dict[str, Any], max_tokens: int = DELIBERATION_MAX_TOKENS) -> Dict[str, Any]:
+        """
+        Enforces strict token cap (~400 tokens) on reasoner deliberation.
+        Truncates excessively verbose fields (tactical justification, visual hierarchy, master plan)
+        to prevent attention drift, loop rambling, and token waste.
+        """
+        if not delib or not isinstance(delib, dict):
+            return delib or {}
+
+        total_tokens = sum(cls.count_tokens(str(v)) for v in delib.values())
+        if total_tokens <= max_tokens:
+            return delib
+
+        pruned = dict(delib)
+
+        # Cap list fields like end_to_end_master_plan first
+        if "end_to_end_master_plan" in pruned and isinstance(pruned["end_to_end_master_plan"], list):
+            plan_items = [str(x).strip() for x in pruned["end_to_end_master_plan"] if str(x).strip()]
+            if len(plan_items) > 4:
+                plan_items = plan_items[:4]
+            capped_items = []
+            for item in plan_items:
+                words = item.split()
+                if len(words) > 18:
+                    capped_items.append(" ".join(words[:18]) + "...")
+                else:
+                    capped_items.append(item)
+            pruned["end_to_end_master_plan"] = capped_items
+            total_tokens = sum(cls.count_tokens(str(v)) for v in pruned.values())
+
+        target_field_order = [
+            "tactical_action_justification",
+            "candidate_evaluation",
+            "action_plan",
+            "screen_state_and_visual_hierarchy",
+            "observation_analysis",
+            "mistake_critique_and_loop_diagnosis",
+            "user_intent_and_success_criteria",
+            "strategy_plan",
+        ]
+
+        # Pass 1: truncate to 35 words
+        for field_name in target_field_order:
+            if total_tokens <= max_tokens:
+                break
+            if field_name in pruned and isinstance(pruned[field_name], str):
+                orig_val = pruned[field_name]
+                words = orig_val.split()
+                if len(words) > 35:
+                    pruned[field_name] = " ".join(words[:35]) + "..."
+                    total_tokens = sum(cls.count_tokens(str(v)) for v in pruned.values())
+
+        # Pass 2: progressively tighter truncation if still exceeding budget
+        word_limits = [25, 18, 12]
+        for limit in word_limits:
+            if total_tokens <= max_tokens:
+                break
+            for field_name in target_field_order:
+                if total_tokens <= max_tokens:
+                    break
+                if field_name in pruned and isinstance(pruned[field_name], str):
+                    words = pruned[field_name].split()
+                    if len(words) > limit:
+                        pruned[field_name] = " ".join(words[:limit]) + "..."
+                        total_tokens = sum(cls.count_tokens(str(v)) for v in pruned.values())
+
+        return pruned
+
+    @classmethod
+    def cap_thinking_text(cls, text: str, max_tokens: int = DELIBERATION_MAX_TOKENS) -> str:
+        """Truncates string thinking traces (<think> blocks) strictly under token limit."""
+        if not text:
+            return ""
+        if cls.count_tokens(text) <= max_tokens:
+            return text
+        words = text.split()
+        max_words = int(max_tokens * 0.75)
+        if len(words) > max_words:
+            return " ".join(words[:max_words]) + "..."
+        return text
+
     @classmethod
     def score_droplet_relevance(
         cls,
@@ -114,6 +198,10 @@ class TokenBudgetGuard:
         3. Active foreground window controls (+250)
         4. User goal keyword matches (+400 direct, +200 partial)
         5. Interactive archetypes (button, text, slider, tab) (+150)
+        Deprioritizes:
+        - Background window distractors outside active window (-5000)
+        - Navigation drawer toggles during normal calculation/input (-3000)
+        - Surface probes (-300)
         """
         score = 0.0
         lbl = str(getattr(d, "label", "")).lower()
@@ -134,17 +222,31 @@ class TokenBudgetGuard:
         if any(tok in combined for tok in dialog_tokens):
             score += 350.0
 
-        # 3. Active foreground window bounds
-        if getattr(d, "is_foreground", True):
-            score += 250.0
+        # 3. Active foreground window bounds & spatial pruning
         if win_rect and len(win_rect) == 4:
             wx1, wy1, wx2, wy2 = win_rect
-            if wx1 <= d.center_x <= wx2 and wy1 <= d.center_y <= wy2:
-                score += 150.0
+            is_desktop_rect = (wx1 == 0 and wy1 == 0 and wx2 >= 1900 and wy2 >= 1000)
+            if not is_desktop_rect:
+                if (wx1 - 5 <= d.center_x <= wx2 + 5) and (wy1 - 5 <= d.center_y <= wy2 + 5):
+                    score += 250.0
+                elif not (modal_rect and (modal_rect[0] - 10 <= d.center_x <= modal_rect[2] + 10 and modal_rect[1] - 10 <= d.center_y <= modal_rect[3] + 10)):
+                    # Background distractors outside active window: heavily deprioritize
+                    score -= 5000.0
+        if getattr(d, "is_foreground", True):
+            score += 150.0
+
+        # Navigation drawer filter: Do NOT boost navigation drawer controls for task open/close verbs
+        is_nav_toggle = any(k in combined for k in ("open navigation", "close navigation", "toggle navigation", "navigation drawer", "hamburger menu"))
+        if is_nav_toggle and not any(k in (goal or "").lower() for k in ("nav", "drawer", "menu")):
+            # Heavily deprioritize navigation drawer toggles during normal calculation/task execution
+            score -= 3000.0
 
         # 4. User goal keyword matches
         if goal:
             goal_words = set(re.findall(r"\w+", goal.lower()))
+            # Remove generic verbs from keyword matching on nav drawer controls
+            if is_nav_toggle:
+                goal_words = goal_words - {"open", "close", "start", "exit"}
             node_words = set(re.findall(r"\w+", combined))
             direct_hits = goal_words & node_words
             score += len(direct_hits) * 400.0

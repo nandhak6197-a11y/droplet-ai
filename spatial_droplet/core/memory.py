@@ -16,8 +16,10 @@ class EpisodicTrajectoryMemory:
         self.goal = goal
         self.max_steps = max_steps
         self.steps: List[TrajectoryStep] = []
+        self.checkpoints: Optional[List[Any]] = None
         self.is_completed = False
         self.completion_summary = ""
+
 
     def add_step(self, step: TrajectoryStep):
         self.steps.append(step)
@@ -105,7 +107,16 @@ class EpisodicTrajectoryMemory:
 
         lines = []
 
+        # 0. Awareness Router Checkpoints (if present)
+        if self.checkpoints:
+            from ..reasoning.awareness_router import AwarenessRouter
+            cp_str = AwarenessRouter.format_checkpoints_for_prompt(self.checkpoints)
+            if cp_str:
+                lines.append(cp_str)
+                lines.append("")
+
         # 1. Track Active Master Plan progression if recorded (inspect canonical then legacy)
+
         active_plan = None
         for s in reversed(self.steps):
             mp = getattr(s, "end_to_end_master_plan", None) or getattr(s, "master_plan", None)

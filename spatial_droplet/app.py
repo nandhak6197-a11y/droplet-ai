@@ -293,15 +293,33 @@ def main():
         app_title = current_win_ctx.title if (current_win_ctx and current_win_ctx.is_valid) else "Desktop"
         print(f"\n[Copilot Task] >>> Instruction: \"{cmd}\" (Active Context: {app_title})")
 
-        # 2. Check for optional turns limit flag e.g. /turns 10 ...
+        # 2. Check for optional command prefixes: /turns, /goal, /boost (in any combination/order)
         turn_limit = 50
-        match = re.match(r'^/turns\s+(\d+)\s+(.+)$', cmd.strip(), re.IGNORECASE)
-        if match:
-            try:
-                turn_limit = int(match.group(1))
-                cmd = match.group(2).strip()
-            except Exception:
-                pass
+        is_boost = False
+        cmd_clean = cmd.strip()
+        while True:
+            m_turns = re.match(r'^/turns\s+(\d+)\s*(.*)$', cmd_clean, re.IGNORECASE)
+            if m_turns:
+                try:
+                    turn_limit = int(m_turns.group(1))
+                except Exception:
+                    pass
+                cmd_clean = m_turns.group(2).strip()
+                continue
+            if re.match(r'^/boost\b', cmd_clean, re.IGNORECASE):
+                is_boost = True
+                cmd_clean = re.sub(r'^/boost\s*', '', cmd_clean, flags=re.IGNORECASE).strip()
+                continue
+            if re.match(r'^/goal\b', cmd_clean, re.IGNORECASE):
+                cmd_clean = re.sub(r'^/goal\s*', '', cmd_clean, flags=re.IGNORECASE).strip()
+                continue
+            break
+
+        if is_boost and turn_limit == 50:
+            turn_limit = 75
+
+        cmd = cmd_clean or cmd
+
 
         # 3. Autonomous Cognitive Trajectory Engine (Groq 25-Key Rotator / Qwen 27B / ngrok)
         # 100% of natural language instructions (voice or typed) are dispatched directly to the AI Model
@@ -317,9 +335,10 @@ def main():
         else:
             groq_m = getattr(reasoner, "preferred_groq_model", None) or os.environ.get("GROQ_PRIMARY_MODEL", "qwen/qwen3.8-27b")
             active_provider = f"⚡ Groq 25-Key Rotator ({groq_m})"
-        print(f"\n🧠 [AI Trajectory Engine] Active Reasoner: {active_provider}")
-        print(f"🎯 Target Goal: \"{cmd}\"")
-        safe_set_status(f"🧠 {active_provider[:24]} thinking...", color="#00e5ff")
+        boost_tag = " [🚀 BOOST MODE ACTIVE]" if is_boost else ""
+        print(f"\n🧠 [AI Trajectory Engine] Active Reasoner: {active_provider}{boost_tag}")
+        print(f"🎯 Target Goal: \"{cmd}\" (Turns: {turn_limit}, Boost: {is_boost})")
+        safe_set_status(f"🧠 {active_provider[:20]}{' 🚀' if is_boost else ''} thinking...", color="#00e5ff")
 
         try:
             memory = trajectory_engine.run_trajectory(
@@ -329,7 +348,8 @@ def main():
                 max_turns=turn_limit,
                 status_callback=safe_set_status,
                 render_callback=safe_render_hud,
-                abort_event=current_abort_event
+                abort_event=current_abort_event,
+                boost=is_boost
             )
 
             if memory.is_completed:

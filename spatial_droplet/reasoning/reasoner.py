@@ -745,7 +745,7 @@ class DiagonalDropletReasoner:
         return None
 
     @classmethod
-    def _clean_decision(cls, decision: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _clean_decision(cls, decision: Optional[Dict[str, Any]], **kwargs) -> Optional[Dict[str, Any]]:
         if not decision or not isinstance(decision, dict):
             return None
 
@@ -1005,7 +1005,111 @@ class DiagonalDropletReasoner:
                         break
             decision["key"] = str(k or "enter").strip().lower()
 
+        # 7. LAUNCH_APP Sanity, In-Window Keyboard Input & Active Foreground Guard
+        act_now = decision.get("action", "")
+        if act_now == "launch_app":
+            target_str = str(decision.get("input_text") or decision.get("target") or decision.get("app") or "").strip()
+            # If target is numeric, math operator, or calculation expression (e.g. '2', '2+2', '+', '-')
+            if target_str and (target_str.isdigit() or re.match(r'^\d+\s*[\+\-\*\/]\s*\d+', target_str) or (len(target_str) <= 2 and not target_str.isalpha())):
+                decision["action"] = "type"
+                decision["action_type"] = "type"
+                decision["input_text"] = target_str
+            elif target_str:
+                app_low = target_str.lower()
+                fg_title = str(decision.get("active_window") or "").lower()
+                if not fg_title and "win_ctx" in kwargs and kwargs["win_ctx"]:
+                    fg_title = (kwargs["win_ctx"].title or "").lower()
+                if not fg_title:
+                    try:
+                        from ..platform.window import get_active_window_context
+                        act_ctx = get_active_window_context()
+                        if act_ctx and act_ctx.is_valid and act_ctx.title != "Desktop":
+                            fg_title = act_ctx.title.lower()
+                    except Exception:
+                        pass
+                if fg_title:
+                    from .awareness_router import AwarenessRouter
+                    known_aliases = AwarenessRouter.KNOWN_APPS.get(app_low, [app_low])
+                    if any(alias in fg_title for alias in known_aliases if len(alias) >= 3) or app_low in fg_title:
+                        # Application is ALREADY open and in foreground!
+                        if decision.get("input_text") and not any(alias in decision.get("input_text", "").lower() for alias in known_aliases):
+                            decision["action"] = "type"
+                            decision["action_type"] = "type"
+                        elif decision.get("target_dot_id") is not None:
+                            decision["action"] = "click"
+                            decision["action_type"] = "click"
+                        else:
+                            decision["action"] = "wait"
+                            decision["action_type"] = "wait"
+
+        # 8. Cap Deliberation Tokens (~400 tokens budget, up to 600 in boost mode)
+        if delib and isinstance(delib, dict):
+            from .token_guard import TokenBudgetGuard
+            boost_mode = bool(kwargs.get("boost", False))
+            max_delib = 600 if boost_mode else 400
+            decision["deliberation"] = TokenBudgetGuard.cap_deliberation(delib, max_tokens=max_delib)
+
+        # 9. Label citation verification: verify target_label against candidate droplet manifest
+        target_dot_id = decision.get("target_dot_id")
+        cands = kwargs.get("candidates") or kwargs.get("all_candidates") or []
+        if target_dot_id is not None and cands:
+            cand_node = next((d for d in cands if getattr(d, 'id', None) == target_dot_id), None)
+            cited_label = str(decision.get("target_label") or "").strip()
+            if not cited_label and delib:
+                delib_str = str(delib.get("tactical_action_justification", "")) + " " + str(delib.get("candidate_evaluation", ""))
+                m_cited = re.search(r'\[(?:dot|node)?\s*' + str(target_dot_id) + r'\]\s*\(?.*?\)?\s*[\"\'\“\‘]([^\"\'\”\’]+)[\"\'\”\’]', delib_str)
+                if m_cited:
+                    cited_label = m_cited.group(1).strip()
+
+            if cand_node:
+                actual_label = getattr(cand_node, 'label', '')
+                if cited_label:
+                    c_clean = re.sub(r'\[(?:btn|icon|app)\]\s*', '', cited_label.lower()).strip()
+                    a_clean = re.sub(r'\[(?:btn|icon|app)\]\s*', '', actual_label.lower()).strip()
+
+                    is_match = (
+                        c_clean == a_clean
+                        or c_clean in a_clean
+                        or a_clean in c_clean
+                        or any(w in a_clean.split() for w in c_clean.split() if len(w) >= 3)
+                        or (c_clean in ("+", "-", "*", "/", "=", "plus", "minus", "equals") and any(op in a_clean for op in ("+", "-", "*", "/", "=")))
+                    )
+
+                    if not is_match:
+                        # Mismatch! Search for correct candidate matching cited label
+                        matched_cand = None
+                        for other in cands:
+                            o_lbl = re.sub(r'\[(?:btn|icon|app)\]\s*', '', getattr(other, 'label', '').lower()).strip()
+                            if (c_clean == o_lbl or c_clean in o_lbl.split() or
+                                (c_clean in ("+", "plus") and "+" in o_lbl) or
+                                (c_clean in ("-", "minus") and "-" in o_lbl) or
+                                (c_clean in ("*", "multiply") and any(k in o_lbl for k in ("*", "multiply", "×"))) or
+                                (c_clean in ("/", "divide") and any(k in o_lbl for k in ("/", "divide", "÷"))) or
+                                (c_clean in ("=", "equals") and "=" in o_lbl)):
+                                matched_cand = other
+                                break
+
+                        if matched_cand:
+                            print(f"[Label Citation Verification] ⚠️ Citation mismatch: cited '{cited_label}' on Dot [{target_dot_id}] ('{actual_label}'). Auto-correcting to Dot [{matched_cand.id}] ('{matched_cand.label}')")
+                            decision["target_dot_id"] = matched_cand.id
+                            decision["target_droplet_id"] = matched_cand.id
+                            decision["target_label"] = matched_cand.label
+                        else:
+                            decision["target_label"] = actual_label
+                    else:
+                        decision["target_label"] = actual_label
+                else:
+                    decision["target_label"] = actual_label
+            elif cited_label:
+                # Target dot ID not found in cands, but model provided cited_label
+                matched_cand = next((d for d in cands if cited_label.lower() in getattr(d, 'label', '').lower()), None)
+                if matched_cand:
+                    decision["target_dot_id"] = matched_cand.id
+                    decision["target_droplet_id"] = matched_cand.id
+                    decision["target_label"] = matched_cand.label
+
         return decision
+
 
     @classmethod
     def _extract_json(cls, raw: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -3389,7 +3493,8 @@ Respond with ONLY JSON:
             win_info = f"\"{win_ctx.title}\" [Bounds: {win_ctx.rect}]"
 
         key_nodes = [d for d in droplets if d.category != 'surface_probe']
-        max_ui_nodes = 36
+        boost_mode = bool(kwargs.get("boost", False))
+        max_ui_nodes = 48 if boost_mode else 36
         goal_words = set(re.findall(r'\w+', goal.lower()))
 
         # Check if an active modal dialog is present in screen awareness
@@ -3436,6 +3541,12 @@ Respond with ONLY JSON:
 
             return (modal_score, num_match, kw_match, dialog_score, fg_score, app_score)
 
+        # Active Window Spatial Pruning:
+        # Filter droplets outside active foreground window rect to eliminate clicking background windows
+        if has_win:
+            from .awareness_router import AwarenessRouter
+            key_nodes = AwarenessRouter.filter_spatial_droplets(key_nodes, win_ctx, modal_rect)
+
         if len(key_nodes) > max_ui_nodes:
             key_nodes.sort(key=relevance_score, reverse=True)
             key_nodes = key_nodes[:max_ui_nodes]
@@ -3471,7 +3582,30 @@ Respond with ONLY JSON:
             win_rect = screen_awareness.active_window_rect
 
         spatial_graph = self._build_spatial_layout_graph(nodes_for_ai, int(sw_turn), int(sh_turn), modal_rect, win_rect=win_rect)
-        trajectory_history = memory.format_history_for_prompt()
+
+        # Awareness Router Sequential Checkpoint tracking
+        from .awareness_router import AwarenessRouter
+        checkpoints = getattr(memory, "checkpoints", None) if memory else None
+        tokens_on_screen = set(re.findall(r'\w+', (goal or "").lower()))
+        if checkpoints is None:
+            checkpoints = AwarenessRouter.decompose_goal(goal)
+            # Immediate Turn 1 screen state evaluation: if app is already active in foreground, advance past launch!
+            checkpoints = AwarenessRouter.evaluate_screen_and_advance(
+                checkpoints, win_ctx, screen_tokens=tokens_on_screen
+            )
+            if memory:
+                memory.checkpoints = checkpoints
+        else:
+            last_s = memory.steps[-1] if (memory and memory.steps) else None
+            checkpoints = AwarenessRouter.evaluate_screen_and_advance(
+                checkpoints, win_ctx, screen_tokens=tokens_on_screen, last_step=last_s
+            )
+            if memory:
+                memory.checkpoints = checkpoints
+
+        cp_block = AwarenessRouter.format_checkpoints_for_prompt(checkpoints)
+        trajectory_history = memory.format_history_for_prompt() if memory else ""
+
 
         grounding_info = get_system_grounding_context()
         grounding_text = grounding_info["text"]
@@ -3528,7 +3662,19 @@ Operational Invariants (NON-NEGOTIABLE):
    - Text replacement: "clear_and_type" with input_text. Form submit: "type_and_enter". Shortcuts: "copy", "paste", "select_all", "undo", "redo", "save", "find", "minimize", "maximize", "win_run".
 7. ZERO PASSIVE TEXT DELIBERATION:
    - Every single turn MUST dispatch a verified, grounded desktop action. You MUST NEVER return conversational text or deliberation without an action. Zero turns terminate in passive commentary.
+8. STRICT ~400 TOKENS DELIBERATION BUDGET:
+   - Deliberation (<think> and "deliberation" object) is strictly capped at ~400 tokens (~250-300 words).
+   - Long rambling monologues, repetitive prose, or passive commentary are CONSTITUTIONALLY FORBIDDEN as they cause attention drift and action errors.
+9. LAUNCH_APP & KEYBOARD INPUT INVARIANTS:
+   - Action "launch_app" is ONLY permitted when the target application is NOT already in the foreground. If the application is already active, NEVER call "launch_app".
+   - For windows accepting keyboard input (e.g. Calculator, forms, search bars, editors), use "type" or "hotkey", NEVER "launch_app" to input numbers or text (e.g. to enter '2' in Calculator, use action "type" with input_text "2", NEVER launch_app "2").
+10. AWARENESS ROUTER SEQUENTIAL CHECKPOINTS:
+   - You must verify the current active checkpoint is physically satisfied on screen before advancing to subsequent checkpoints.
+   - For chained workflows (e.g. open, do, verify, close), perform each step in sequence and execute close/cleanup only at the end.
+11. NAVIGATION DRAWER & WINDOW CLOSE INVARIANTS:
+   - Do NOT click "Open Navigation" or "Close Navigation" (hamburger menu) to open or close an application. To close a window, use hotkey ["alt", "f4"] or click the window titlebar Close [X] button. The navigation drawer is strictly for switching calculator modes (Scientific, Graphing) and must NOT be toggled during standard calculations or data entry.
 </constitution>
+
 
 <screen_context>
 Foreground Window: {win_info}
@@ -3608,6 +3754,7 @@ You MUST respond with valid JSON where the "deliberation" object is generated FI
           | "press" | "hotkey" | "copy" | "paste" | "select_all" | "undo" | "redo" | "save" | "find"
           | "hover" | "hover_and_wait" | "drag" | "scroll" | "open_path" | "launch_app" | "switch_window" | "minimize" | "maximize" | "win_run" | "wait" | "stop",
   "target_dot_id": <int or null (Required if interacting with a specific UI element)>,
+  "target_label": <string or null (verbatim label of target dot from candidate manifest to verify dot identity before clicking)>,
   "x": <int or null (Absolute X coordinate for start/target if dot ID not used)>,
   "y": <int or null (Absolute Y coordinate for start/target if dot ID not used)>,
   "drag_destination_dot_id": <int or null (Required if action is 'drag' and target is an element)>,
@@ -3660,7 +3807,10 @@ Active Foreground Window: {win_info}
 <spatial_layout_graph>
 {spatial_graph}
 </spatial_layout_graph>
+
+{cp_block}
 </live_screen_observation>
+
 
 <instruction>
 Autoregressively evaluate the screen state and previous step critique in <deliberation>, and dispatch the single next action.
@@ -3747,7 +3897,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                         {"role": "user", "content": user_msg_payload}
                     ],
                     "temperature": 0.1,
-                    "max_tokens": 1200,
+                    "max_tokens": 1200 if boost_mode else 1000,
                     "timeout": 45.0
                 }
                 response = self.ngrok_client.chat.completions.create(**call_kwargs)
@@ -3755,6 +3905,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                 raw = (msg.content or getattr(msg, "reasoning", "") or '').strip()
                 decision = self._extract_json(raw)
                 if decision:
+                    decision = self._clean_decision(decision, candidates=nodes_for_ai, win_ctx=win_ctx, boost=boost_mode)
                     decision['model_used'] = f"ngrok/{self.ngrok_model}"
                     decision['key_used'] = "Kaggle Qwen GPU"
                     try:
@@ -3762,6 +3913,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                     except Exception:
                         pass
                     return DecisionResult(decision)
+
             except Exception as ngrok_err:
                 print(f"[Rotator Trajectory] Kaggle Qwen primary failed ({type(ngrok_err).__name__}: {str(ngrok_err)[:120]}); falling back to key pool.")
 
@@ -3801,7 +3953,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                             {"role": "user", "content": user_content}
                         ],
                         "temperature": 0.1,
-                        "max_tokens": 1000
+                        "max_tokens": 1200 if boost_mode else 1000
                     }
                     if "gpt-oss" in model_name:
                         call_kwargs["reasoning_effort"] = "low"
@@ -3814,6 +3966,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                             print(f"\n🧠 [Groq Qwen Thinking Trace]:\n{think_text}\n")
                     decision = self._extract_json(raw)
                     if decision:
+                        decision = self._clean_decision(decision, candidates=nodes_for_ai, win_ctx=win_ctx, boost=boost_mode)
                         decision['model_used'] = model_name
                         decision['key_used'] = f"Key #{active_idx + 1} ({masked_key})"
                         try:
@@ -3821,6 +3974,7 @@ Autoregressively evaluate the screen state and previous step critique in <delibe
                         except Exception:
                             pass
                         return DecisionResult(decision)
+
                 except Exception as e:
                     err_str = str(e)
                     last_err = f"Key #{active_idx + 1} ({masked_key}) [{model_name}]: {err_str}"

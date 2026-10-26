@@ -59,7 +59,8 @@ class AutonomousTrajectoryEngine:
         win_ctx: Optional[WindowContext],
         screen_awareness: Optional[ScreenAwarenessContext] = None,
         loop_intervention: Optional[str] = None,
-        frame: Optional[Any] = None
+        frame: Optional[Any] = None,
+        boost: bool = False
     ) -> Dict:
         kwargs: Dict[str, Any] = {}
         try:
@@ -72,6 +73,8 @@ class AutonomousTrajectoryEngine:
                 kwargs["loop_intervention"] = loop_intervention
             if frame is not None and ("screenshot" in params or has_var_kw):
                 kwargs["screenshot"] = frame
+            if boost and ("boost" in params or has_var_kw):
+                kwargs["boost"] = boost
         except Exception:
             if screen_awareness is not None:
                 kwargs["screen_awareness"] = screen_awareness
@@ -79,6 +82,8 @@ class AutonomousTrajectoryEngine:
                 kwargs["loop_intervention"] = loop_intervention
             if frame is not None:
                 kwargs["screenshot"] = frame
+            if boost:
+                kwargs["boost"] = boost
         return self.reasoner.decide_turn(goal, memory, droplets, win_ctx, **kwargs)
 
     @staticmethod
@@ -147,6 +152,10 @@ class AutonomousTrajectoryEngine:
             # Strip archetype prefixes like [btn] or [icon]
             clean_btn = re.sub(r'\[(?:btn|icon|app)\]\s*', '', lbl).strip()
 
+            from ..reasoning.awareness_router import AwarenessRouter
+            if AwarenessRouter.is_nav_drawer_toggle(clean_btn):
+                continue
+
             # Skip clear dismissal / cancel tokens
             if any(clean_btn == d_word or clean_btn.startswith(d_word + " ") for d_word in ["cancel", "no", "abort", "close", "dont save", "don't save"]):
                 continue
@@ -196,7 +205,9 @@ class AutonomousTrajectoryEngine:
         max_turns: int = 50,
         status_callback: Optional[Callable[[str, str], None]] = None,
         render_callback: Optional[Callable[[List[DiagonalDroplet], Optional[WindowContext]], None]] = None,
-        abort_event: Optional[threading.Event] = None
+        abort_event: Optional[threading.Event] = None,
+        boost: bool = False,
+        **kwargs
     ) -> EpisodicTrajectoryMemory:
         memory = EpisodicTrajectoryMemory(goal=goal, max_steps=max_turns)
         current_droplets = initial_droplets or []
@@ -224,8 +235,9 @@ class AutonomousTrajectoryEngine:
                         pass
 
         print(f"\n" + "=" * 76)
+        boost_str = " | 🚀 BOOST MODE ACTIVE" if boost else ""
         print(f"[Trajectory Engine] 🚀 Initiating Closed-Loop Trajectory for Goal: \"{goal}\"")
-        print(f"                     Max Safety Cap: {max_turns} turns | Dynamic Re-Spraying Active")
+        print(f"                     Max Safety Cap: {max_turns} turns | Dynamic Re-Spraying Active{boost_str}")
         print("=" * 76)
 
         if hasattr(self.sprayer, 'reset_tracking'):
@@ -290,7 +302,8 @@ class AutonomousTrajectoryEngine:
                 droplets=current_droplets,
                 win_ctx=current_win_ctx,
                 screen_awareness=screen_awareness,
-                frame=frame
+                frame=frame,
+                boost=boost
             )
 
             if "error" in decision:
@@ -342,10 +355,27 @@ class AutonomousTrajectoryEngine:
                     decision["key"] = "backspace"
             elif action in ("type_text", "write_text"):
                 action = "type"
+            elif action in ("launch_app", "open_app"):
+                inp = str(input_text or decision.get("target") or decision.get("app") or "").strip()
+                if inp and (inp.isdigit() or re.match(r'^\d+\s*[\+\-\*\/]\s*\d+', inp) or (len(inp) <= 2 and not inp.isalpha())):
+                    print(f"[Trajectory Engine] Normalizing hallucinated launch_app '{inp}' to 'type'")
+                    action = "type"
+                    input_text = inp
+                elif current_win_ctx and current_win_ctx.is_valid and current_win_ctx.title != "Desktop":
+                    from ..reasoning.awareness_router import AwarenessRouter
+                    known_aliases = AwarenessRouter.KNOWN_APPS.get(inp.lower(), [inp.lower()])
+                    if any(alias in current_win_ctx.title.lower() for alias in known_aliases if len(alias) >= 3) or inp.lower() in current_win_ctx.title.lower():
+                        if target_node:
+                            action = "click"
+                        elif input_text and not any(alias in input_text.lower() for alias in known_aliases):
+                            action = "type"
+                        else:
+                            action = "wait"
             elif action in ("minimize", "minimize_window"):
                 action = "minimize"
             elif action in ("maximize", "maximize_window"):
                 action = "maximize"
+
 
             allowed_actions = {
                 "click", "single_click", "double_click", "triple_click",
@@ -556,6 +586,10 @@ class AutonomousTrajectoryEngine:
                 clean_tgt = re.sub(r'\[item \d+ of \d+.*?\]', '', target_label.lower()).strip()
                 clean_tgt = re.sub(r'\[(?:btn|icon|app)\]\s*', '', clean_tgt).strip()
 
+            from ..reasoning.awareness_router import AwarenessRouter
+            if AwarenessRouter.is_nav_drawer_toggle(clean_tgt):
+                clean_tgt = "nav_drawer_toggle"
+
             target_semantic = clean_tgt or (f"dot_{target_id}" if target_id is not None else "")
             target_key = clean_tgt or (str(input_text).strip().lower() if action in ('open_path', 'system_open_path', 'type') else "") or (f"dot_{target_id}" if target_id is not None else (key_single or str(key_combo) or action))
 
@@ -575,10 +609,20 @@ class AutonomousTrajectoryEngine:
             loop_detected = False
             loop_reason = ""
 
+            # 0. Navigation Drawer Toggle Loop Guard:
+            is_nav_drawer_click = (action == "click" and clean_tgt == "nav_drawer_toggle")
+            prev_was_nav_drawer = bool(recent_action_sigs and recent_action_sigs[-1][0] == "click" and recent_action_sigs[-1][2] == "nav_drawer_toggle")
+            if is_nav_drawer_click and (prev_was_nav_drawer or any(sig[2] == "nav_drawer_toggle" for sig in recent_action_sigs[-2:])):
+                loop_detected = True
+                loop_reason = (
+                    "Navigation drawer toggle loop detected: Toggling the drawer ('Open Navigation' / 'Close Navigation') "
+                    "does not make progress on calculation or application tasks."
+                )
+
             # 1. Ping-Pong Loop Detection (Strict <= 2 turns / 1 cycle):
             # In sequence A -> B -> A, Turn 3 proposes A again after B.
             # Engages immediately on Turn 3 when alternating oscillation is attempted.
-            if len(recent_action_sigs) >= 2 and recent_action_sigs[-2] == current_sig and recent_action_sigs[-1] != current_sig:
+            elif len(recent_action_sigs) >= 2 and recent_action_sigs[-2] == current_sig and recent_action_sigs[-1] != current_sig:
                 loop_detected = True
                 loop_reason = (
                     f"Alternating ping-pong oscillation detected: '{current_sig[0]}' ➜ "
@@ -669,7 +713,8 @@ class AutonomousTrajectoryEngine:
                     win_ctx=current_win_ctx,
                     screen_awareness=screen_awareness,
                     loop_intervention=intervention_msg,
-                    frame=frame
+                    frame=frame,
+                    boost=boost
                 )
 
                 # Evaluate pivoted decision
@@ -682,6 +727,13 @@ class AutonomousTrajectoryEngine:
                 if piv_node:
                     piv_clean_tgt = re.sub(r'\[item \d+ of \d+.*?\]', '', getattr(piv_node, 'label', '').lower()).strip()
                     piv_clean_tgt = re.sub(r'\[(?:btn|icon|app)\]\s*', '', piv_clean_tgt).strip()
+                elif pivoted_decision.get("target_label"):
+                    piv_clean_tgt = re.sub(r'\[item \d+ of \d+.*?\]', '', str(pivoted_decision.get("target_label")).lower()).strip()
+                    piv_clean_tgt = re.sub(r'\[(?:btn|icon|app)\]\s*', '', piv_clean_tgt).strip()
+
+                if AwarenessRouter.is_nav_drawer_toggle(piv_clean_tgt):
+                    piv_clean_tgt = "nav_drawer_toggle"
+
                 piv_semantic = piv_clean_tgt or (f"dot_{piv_target_id}" if piv_target_id is not None else "")
                 piv_sig = (
                     pivoted_action,
@@ -693,10 +745,12 @@ class AutonomousTrajectoryEngine:
                 )
 
                 # Check if model successfully pivoted to a new, non-looping signature
+                is_still_drawer_loop = (clean_tgt == "nav_drawer_toggle" or "drawer" in loop_reason) and (piv_clean_tgt == "nav_drawer_toggle")
                 if (
                     pivoted_action in allowed_actions
                     and piv_sig != current_sig
                     and (not recent_action_sigs or piv_sig != recent_action_sigs[-1])
+                    and not is_still_drawer_loop
                     and "error" not in pivoted_decision
                 ):
                     print(f"[Trajectory Loop Guard] 🔀 Auto-Pivot SUCCESS: Model shifted to '{pivoted_action.upper()}' on '{piv_semantic or 'None'}'")
@@ -741,43 +795,62 @@ class AutonomousTrajectoryEngine:
                 else:
                     # Heuristic Smart Tactical Escape: When reasoner still returns the same blocked action or errors
                     print(f"[Trajectory Loop Guard] 🛡️ Model deliberation did not break deadlock; engaging generalized smart tactical escape...")
-                    commit_droplet = self._find_primary_dialog_commit(droplet_map, screen_awareness, current_win_ctx)
-                    if commit_droplet:
-                        print(f"[Trajectory Loop Guard] 🎯 Auto-targeting primary dialog commit control: '{commit_droplet.label}' (Dot [{commit_droplet.id}])")
-                        action = "click"
-                        target_node = commit_droplet
-                        target_id = commit_droplet.id
-                        target_label = commit_droplet.label
-                        target_x = commit_droplet.center_x
-                        target_y = commit_droplet.center_y
-                        input_text = None
-                        key_single = None
-                        key_combo = None
-                        semantic_intention = f"Smart Escape: Clicking primary commit control '{commit_droplet.label}'"
-                        expected_transition = "Dialog commits and dismisses"
-                        subgoal = f"Confirm dialog via {commit_droplet.label}"
-                        clean_tgt = re.sub(r'\[(?:btn|icon|app)\]\s*', '', commit_droplet.label.lower()).strip()
-                        target_semantic = clean_tgt
-                        target_key = clean_tgt
-                        current_sig = (action, target_semantic, clean_tgt, "", "", "")
-                    else:
-                        # Non-dialog or no commit droplet found: cycle focus to escape keyboard trap
-                        print(f"[Trajectory Loop Guard] 🎯 Cycling focus via 'tab' key to escape focus trap.")
+                    if clean_tgt == "nav_drawer_toggle" or "drawer" in loop_reason:
+                        # Navigation drawer toggle loop: dismiss drawer with Escape
+                        print(f"[Trajectory Loop Guard] 🎯 Dismissing navigation drawer via 'esc' key.")
                         action = "press"
                         target_node = None
                         target_id = None
-                        target_label = "Keyboard [tab]"
+                        target_label = "Keyboard [esc]"
                         target_x = None
                         target_y = None
                         input_text = None
-                        key_single = "tab"
+                        key_single = "esc"
                         key_combo = None
-                        semantic_intention = "Smart Escape: Cycle focus with Tab to escape UI deadlock"
-                        expected_transition = "Focus shifts to next actionable UI control"
-                        subgoal = "Cycle focus to recover interaction"
-                        target_semantic = "key_tab"
-                        target_key = "tab"
-                        current_sig = (action, target_semantic, "", "", "tab", "")
+                        semantic_intention = "Smart Escape: Dismiss navigation drawer with Escape"
+                        expected_transition = "Drawer closes and calculation surface is focused"
+                        subgoal = "Dismiss drawer and focus workspace"
+                        target_semantic = "key_esc"
+                        target_key = "esc"
+                        current_sig = (action, target_semantic, "", "", "esc", "")
+                    else:
+                        commit_droplet = self._find_primary_dialog_commit(droplet_map, screen_awareness, current_win_ctx)
+                        if commit_droplet:
+                            print(f"[Trajectory Loop Guard] 🎯 Auto-targeting primary dialog commit control: '{commit_droplet.label}' (Dot [{commit_droplet.id}])")
+                            action = "click"
+                            target_node = commit_droplet
+                            target_id = commit_droplet.id
+                            target_label = commit_droplet.label
+                            target_x = commit_droplet.center_x
+                            target_y = commit_droplet.center_y
+                            input_text = None
+                            key_single = None
+                            key_combo = None
+                            semantic_intention = f"Smart Escape: Clicking primary commit control '{commit_droplet.label}'"
+                            expected_transition = "Dialog commits and dismisses"
+                            subgoal = f"Confirm dialog via {commit_droplet.label}"
+                            clean_tgt = re.sub(r'\[(?:btn|icon|app)\]\s*', '', commit_droplet.label.lower()).strip()
+                            target_semantic = clean_tgt
+                            target_key = clean_tgt
+                            current_sig = (action, target_semantic, clean_tgt, "", "", "")
+                        else:
+                            # Non-dialog or no commit droplet found: cycle focus to escape keyboard trap
+                            print(f"[Trajectory Loop Guard] 🎯 Cycling focus via 'tab' key to escape focus trap.")
+                            action = "press"
+                            target_node = None
+                            target_id = None
+                            target_label = "Keyboard [tab]"
+                            target_x = None
+                            target_y = None
+                            input_text = None
+                            key_single = "tab"
+                            key_combo = None
+                            semantic_intention = "Smart Escape: Cycle focus with Tab to escape UI deadlock"
+                            expected_transition = "Focus shifts to next actionable UI control"
+                            subgoal = "Cycle focus to recover interaction"
+                            target_semantic = "key_tab"
+                            target_key = "tab"
+                            current_sig = (action, target_semantic, "", "", "tab", "")
 
                 # Dampen failure counts to allow the pivoted action to execute and verify
                 if target_key in target_fail_counts:
@@ -883,12 +956,12 @@ class AutonomousTrajectoryEngine:
             recent_action_sigs.append(current_sig)
 
             # Cognitive Semantic State Verification (Phase 6)
-            is_fatal_hardware_error = act_res and (not act_res.get("verified", True)) and (act_res.get("type") in ("INVALID_ACTION", "EXECUTION_ERROR", "ERROR"))
+            is_fatal_hardware_error = act_res and (not act_res.get("verified", True)) and (act_res.get("type") in ("INVALID_ACTION", "EXECUTION_ERROR", "ERROR", "ALREADY_ACTIVE"))
 
             if is_fatal_hardware_error:
-                # Hardware actuator explicitly failed (e.g. file not found, OS error, missing target)
+                # Hardware actuator explicitly failed (e.g. file not found, OS error, missing target, invalid launch)
                 verified = False
-                verdict = "EXECUTION_FAILED"
+                verdict = act_res.get("type", "EXECUTION_FAILED")
                 ver_reason = act_res.get("reason") or act_res.get("error") or "Actuator execution failed"
             else:
                 time.sleep(0.20)  # Brief settling for OS visual transition
@@ -897,21 +970,32 @@ class AutonomousTrajectoryEngine:
                     pre_snap, post_snap, action, input_text, semantic_intention, expected_transition
                 )
 
-                # Fuse physical verifier and semantic verifier:
-                phys_verified = act_res.get("verified", False) if act_res else False
-                sem_verified = sem_ver.get("verified", False)
-
-                if phys_verified or sem_verified:
-                    verified = True
-                    verdict = sem_ver.get("verdict", "CONFIRMED")
-                    if sem_verified and sem_ver.get("reason"):
-                        ver_reason = sem_ver.get("reason")
-                    else:
-                        ver_reason = act_res.get("reason", "Physical transition confirmed")
-                else:
+                if sem_ver.get("verdict") == "INVALID_ACTION":
                     verified = False
+                    verdict = "INVALID_ACTION"
+                    ver_reason = sem_ver.get("reason", "Action declared invalid by cognitive verifier")
+                elif action in ("launch_app", "system_launch_app", "open_app"):
+                    # Launch app MUST be semantically verified by target window appearance
+                    verified = sem_ver.get("verified", False)
                     verdict = sem_ver.get("verdict", "NO_EFFECT")
-                    ver_reason = sem_ver.get("reason") or (act_res.get("reason") if act_res else "No visual or semantic state change detected")
+                    ver_reason = sem_ver.get("reason", "Application launch not verified")
+                else:
+                    # Fuse physical verifier and semantic verifier:
+                    phys_verified = act_res.get("verified", False) if act_res else False
+                    sem_verified = sem_ver.get("verified", False)
+
+                    if phys_verified or sem_verified:
+                        verified = True
+                        verdict = sem_ver.get("verdict", "CONFIRMED")
+                        if sem_verified and sem_ver.get("reason"):
+                            ver_reason = sem_ver.get("reason")
+                        else:
+                            ver_reason = act_res.get("reason", "Physical transition confirmed")
+                    else:
+                        verified = False
+                        verdict = sem_ver.get("verdict", "NO_EFFECT")
+                        ver_reason = sem_ver.get("reason") or (act_res.get("reason") if act_res else "No visual or semantic state change detected")
+
 
             # Track failure counts for target loop prevention
             action_key = f"{action}:{target_key}" if target_key else ""

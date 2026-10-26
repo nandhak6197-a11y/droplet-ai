@@ -94,7 +94,7 @@ class SemanticStateVerifier:
         cursor_changed = (pre_cursor != post_cursor)
 
         # 1. Type action text verification
-        if action == "type" and input_text:
+        if action in ("type", "clear_and_type", "type_and_enter", "click_and_type") and input_text:
             clean_input = input_text.strip().lower()
             input_words = set(re.findall(r'\w+', clean_input))
             if input_words and input_words.issubset(post_tokens):
@@ -129,6 +129,64 @@ class SemanticStateVerifier:
                     "text_removed": [],
                     "reason": f"Typed text '{input_text[:16]}' did not appear on screen."
                 }
+
+        # 1.5 Application launch verification & invalid target guard (e.g. LAUNCH_APP '2')
+        if action in ("launch_app", "system_launch_app", "open_app"):
+            target_str = (input_text or semantic_intention or "").strip().lower()
+            target_clean = re.sub(r'[\s.,!?]+$', '', target_str).strip()
+
+            # Guard against invalid launch targets (numbers, arithmetic expressions, single symbols)
+            is_formula = bool(re.search(r'\d+\s*[\+\-\*\/]\s*\d+', target_clean)) or any(op in target_clean for op in ("+", "*", "=", "/", "<", ">"))
+            if not target_clean or target_clean.isdigit() or is_formula or (len(target_clean) <= 2 and not target_clean.isalpha()):
+                return {
+                    "verified": False,
+                    "verdict": "INVALID_ACTION",
+                    "text_added": [],
+                    "text_removed": [],
+                    "reason": f"Invalid launch target '{input_text}': numbers, formulas and symbols cannot be launched as applications."
+                }
+
+            # Verify window switch or application title presence in post snapshot
+            target_tokens = set(re.findall(r'[a-zA-Z0-9]+', target_clean))
+            post_title_tokens = set(re.findall(r'[a-zA-Z0-9]+', post_title.lower()))
+            matched_title = bool(target_tokens.intersection(post_title_tokens)) or target_clean in post_title.lower()
+
+            # Guard: If application was ALREADY in foreground before the turn, this was NOT a launch transition!
+            pre_title = pre_snap.get("window_title", "")
+            pre_title_tokens = set(re.findall(r'[a-zA-Z0-9]+', pre_title.lower()))
+            was_already_active = (not window_switched) and (bool(target_tokens.intersection(pre_title_tokens)) or target_clean in pre_title.lower())
+            if was_already_active and matched_title:
+                return {
+                    "verified": False,
+                    "verdict": "ALREADY_ACTIVE",
+                    "text_added": [],
+                    "text_removed": [],
+                    "reason": f"Application '{target_clean}' was already active in foreground window '{post_title[:20]}'."
+                }
+
+            if window_switched and matched_title:
+                return {
+                    "verified": True,
+                    "verdict": "CONFIRMED_EXPECTED_TRANSITION",
+                    "text_added": added_tokens[:6],
+                    "text_removed": removed_tokens[:6],
+                    "reason": f"Application '{target_clean}' launched and active window is '{post_title[:20]}'."
+                }
+            elif matched_title and (pre_title.lower() == "desktop" or not pre_title):
+                return {
+                    "verified": True,
+                    "verdict": "CONFIRMED_EXPECTED_TRANSITION",
+                    "text_added": added_tokens[:6],
+                    "text_removed": removed_tokens[:6],
+                    "reason": f"Application '{target_clean}' launched from Desktop into '{post_title[:20]}'."
+                }
+            return {
+                "verified": False,
+                "verdict": "NO_EFFECT",
+                "text_added": [],
+                "text_removed": [],
+                "reason": f"Application '{target_clean}' did not open into foreground (active window remains '{post_title[:20]}')."
+            }
 
         # 2. Window switch transition
         if window_switched:
