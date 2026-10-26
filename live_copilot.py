@@ -1,6 +1,6 @@
 """
 ================================================================================
-     SPATIAL DROPLET — LIVE DESKTOP COPILOT & TRANSPARENT HUD OVERLAY
+     DROPLET-AI — AUTONOMOUS DESKTOP COPILOT & SPATIAL HUD OVERLAY
 ================================================================================
 Floating draggable copilot bar with live transparent Set-of-Marks HUD reticles,
 OS Fast-Path Intent & Scope Router, pure Droplet sub-40ms deterministic actuation,
@@ -26,7 +26,7 @@ except Exception:
     pass
 
 # Ensure project root is on sys.path
-PROJECT_ROOT = r"c:\Users\NANDHA K\Documents\antigravity\amazing-bose"
+PROJECT_ROOT = str(Path(__file__).resolve().parent)
 if os.path.exists(PROJECT_ROOT) and PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

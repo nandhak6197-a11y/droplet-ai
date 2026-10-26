@@ -479,6 +479,35 @@ def maximize_window(hwnd: Optional[int] = None) -> bool:
         return False
 
 
+def close_window(hwnd: Optional[int] = None) -> bool:
+    """
+    Closes a window cleanly via Win32 WM_SYSCOMMAND SC_CLOSE / WM_CLOSE message.
+    If hwnd is omitted or 0, targets the current foreground window.
+    Returns False if hwnd is invalid or belongs to our own UI.
+    """
+    try:
+        user32 = ctypes.windll.user32
+        target_hwnd = hwnd
+
+        if target_hwnd is not None and target_hwnd < 0:
+            return False
+
+        if not target_hwnd or not user32.IsWindow(target_hwnd):
+            target_hwnd = user32.GetForegroundWindow()
+
+        if not target_hwnd or not user32.IsWindow(target_hwnd) or is_own_window(target_hwnd):
+            return False
+
+        WM_SYSCOMMAND = 0x0112
+        SC_CLOSE = 0xF060
+        WM_CLOSE = 0x0010
+        user32.PostMessageW(target_hwnd, WM_SYSCOMMAND, SC_CLOSE, 0)
+        user32.PostMessageW(target_hwnd, WM_CLOSE, 0, 0)
+        return True
+    except Exception:
+        return False
+
+
 def switch_to_window(target: Union[str, int]) -> Optional[int]:
     """
     Searches running desktop windows by title, process name, or HWND,

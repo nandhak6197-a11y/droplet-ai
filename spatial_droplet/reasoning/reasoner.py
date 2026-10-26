@@ -3587,6 +3587,15 @@ Respond with ONLY JSON:
         from .awareness_router import AwarenessRouter
         checkpoints = getattr(memory, "checkpoints", None) if memory else None
         tokens_on_screen = set(re.findall(r'\w+', (goal or "").lower()))
+        for d in droplets:
+            if d.label:
+                tokens_on_screen.update(re.findall(r'\w+', d.label.lower()))
+        if screen_awareness:
+            if screen_awareness.summary:
+                tokens_on_screen.update(re.findall(r'\w+', screen_awareness.summary.lower()))
+            for z_list in screen_awareness.layout_zones.values():
+                for item in z_list:
+                    tokens_on_screen.update(re.findall(r'\w+', item.lower()))
         if checkpoints is None:
             checkpoints = AwarenessRouter.decompose_goal(goal)
             # Immediate Turn 1 screen state evaluation: if app is already active in foreground, advance past launch!
@@ -3654,12 +3663,12 @@ Operational Invariants (NON-NEGOTIABLE):
    - Current Windows User: "{user_name}". Never guess generic accounts.
    - Folder/Drive Navigation: Use action "open_path" with input_text (e.g. "{docs_dir}", "{downloads_dir}", "D:\\") or action "hotkey" with key_combo ["win", "e"].
    - Application Launch & Window Switching: Use action "launch_app" with input_text (e.g. "calc", "notepad", "camera", "powershell") or action "switch_window".
-   - Window State: To minimize current window, use action "minimize" or click the titlebar minimize button. To maximize, use action "maximize".
+   - Window State: To minimize current window, use action "minimize". To maximize, use action "maximize". To close an active window or cleanup at completion, use action "close" or "close_window".
 4. MODAL DIALOG PRECEDENCE:
    - In modals/prompts ("Save Changes", "Confirm Exit", "Save As"), interact directly with dialog choices (Save, Don't Save, Cancel) instead of clicking the main window Close button.
 5. GOAL COMPLETION: When visual evidence confirms the user's overall goal is accomplished, output action "stop" and status "completed".
 6. FLUID HUMAN ACTIONS:
-   - Text replacement: "clear_and_type" with input_text. Form submit: "type_and_enter". Shortcuts: "copy", "paste", "select_all", "undo", "redo", "save", "find", "minimize", "maximize", "win_run".
+   - Text replacement: "clear_and_type" with input_text. Form submit: "type_and_enter". Shortcuts: "copy", "paste", "select_all", "undo", "redo", "save", "find", "minimize", "maximize", "close", "win_run".
 7. ZERO PASSIVE TEXT DELIBERATION:
    - Every single turn MUST dispatch a verified, grounded desktop action. You MUST NEVER return conversational text or deliberation without an action. Zero turns terminate in passive commentary.
 8. STRICT ~400 TOKENS DELIBERATION BUDGET:

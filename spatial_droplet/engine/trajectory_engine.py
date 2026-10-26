@@ -391,7 +391,8 @@ class AutonomousTrajectoryEngine:
                 "hover_and_wait", "hover_wait",
                 "copy", "paste", "select_all", "undo", "redo", "save", "find",
                 "close_tab", "new_tab", "switch_window", "win_run",
-                "minimize", "minimize_window", "maximize", "maximize_window"
+                "minimize", "minimize_window", "maximize", "maximize_window",
+                "close", "close_window"
             }
             if action not in allowed_actions:
                 print(f"[Trajectory Engine] ⚠️ Rejecting unrecognized action: {raw_action!r}; re-prompting on next turn.")
@@ -467,6 +468,32 @@ class AutonomousTrajectoryEngine:
             print(f"  • Intention:   {semantic_intention}")
             print(f"  • Expected:    {expected_transition}")
             print(f"  • Action:      {action.upper()} (Target: Dot [{target_id}], Input: {repr(input_text)})")
+
+            # Check termination against Awareness Router Checkpoints
+            checkpoints = getattr(memory, "checkpoints", None)
+            pending_checkpoints = [cp for cp in (checkpoints or []) if cp.status != "DONE"]
+            if (action in ("stop", "finish") or status == "completed") and pending_checkpoints:
+                next_cp = pending_checkpoints[0]
+                print(f"[Trajectory Engine] ⚠️ Premature completion rejected: Checkpoint {next_cp.id} ('{next_cp.title}') is still PENDING ({len(pending_checkpoints)} remaining).")
+                _notify_status(f"⚠️ Step {next_cp.id} pending: {next_cp.title[:16]}", "#ffb300")
+                win_title = current_win_ctx.title if (current_win_ctx and current_win_ctx.is_valid) else "Desktop"
+                step = TrajectoryStep(
+                    step_num=turn,
+                    goal=goal,
+                    subgoal=f"Execute Step {next_cp.id}: {next_cp.title}",
+                    action="wait",
+                    target_id=None,
+                    target_label="None",
+                    input_text=None,
+                    verified=False,
+                    verification_reason=f"Premature completion prevented: Checkpoint {next_cp.id} ('{next_cp.title}') is still PENDING. Advance to execute this checkpoint.",
+                    active_window=win_title,
+                    semantic_intention=f"Enforce completion of Checkpoint {next_cp.id}: {next_cp.title}",
+                    expected_transition=f"Advance to Step {next_cp.id}",
+                    verdict="NO_EFFECT"
+                )
+                memory.add_step(step)
+                continue
 
             # Check termination
             if action in ("stop", "finish") or status == "completed":
@@ -1038,6 +1065,21 @@ class AutonomousTrajectoryEngine:
                 mistake_critique=mistake_critique
             )
             memory.add_step(step)
+
+            # Dynamically advance Awareness Router checkpoints on confirmed step
+            if hasattr(memory, "checkpoints") and memory.checkpoints:
+                try:
+                    from ..reasoning.awareness_router import AwarenessRouter
+                    t_on_screen = set(re.findall(r'\w+', (goal or "").lower()))
+                    if current_droplets:
+                        for cd in current_droplets:
+                            if cd.label:
+                                t_on_screen.update(re.findall(r'\w+', cd.label.lower()))
+                    memory.checkpoints = AwarenessRouter.evaluate_screen_and_advance(
+                        memory.checkpoints, current_win_ctx, screen_tokens=t_on_screen, last_step=step
+                    )
+                except Exception:
+                    pass
 
         if not memory.is_completed and len(memory.steps) >= max_turns:
             print(f"\n[Trajectory Engine] ⚠️ Reached maximum turn cap ({max_turns}) without explicit stop signal.")

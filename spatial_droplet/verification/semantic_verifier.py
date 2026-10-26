@@ -188,6 +188,25 @@ class SemanticStateVerifier:
                 "reason": f"Application '{target_clean}' did not open into foreground (active window remains '{post_title[:20]}')."
             }
 
+        # 1.8 Window close verification
+        if action in ("close", "close_window"):
+            pre_title = pre_snap.get("window_title", "")
+            if window_switched or post_title.lower() == "desktop" or post_title != pre_title:
+                return {
+                    "verified": True,
+                    "verdict": "CONFIRMED_EXPECTED_TRANSITION",
+                    "text_added": added_tokens[:6],
+                    "text_removed": removed_tokens[:6],
+                    "reason": f"Window '{pre_title[:20]}' closed successfully (active window is '{post_title[:20]}')."
+                }
+            return {
+                "verified": False,
+                "verdict": "NO_EFFECT",
+                "text_added": [],
+                "text_removed": [],
+                "reason": f"Window '{pre_title[:20]}' did not close (still active)."
+            }
+
         # 2. Window switch transition
         if window_switched:
             return {

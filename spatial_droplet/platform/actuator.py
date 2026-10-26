@@ -634,7 +634,8 @@ class PrecisionActuator:
             "undo", "redo", "save", "find", "close_tab", "new_tab",
             "launch_app", "open_path", "system_open", "system_open_path",
             "stop", "finish", "done",
-            "minimize", "minimize_window", "maximize", "maximize_window"
+            "minimize", "minimize_window", "maximize", "maximize_window",
+            "close", "close_window"
         }
         is_spatial = act_clean not in non_spatial_actions
 
@@ -906,6 +907,32 @@ class PrecisionActuator:
                 Win32HardwareActuator.hotkey('win', 'up')
             time.sleep(0.35)
             return {"verified": True, "reason": "Maximized window", "type": "HARDWARE"}
+
+        elif act_clean in ('close', 'close_window'):
+            target_win = input_text or kwargs.get('target', '') or kwargs.get('title', '')
+            print(f"[Actuator] [Close Window]: Target '{target_win}' (Active: '{win_ctx.title if win_ctx else 'None'}')")
+            closed = False
+            target_hwnd = None
+            if target_win:
+                try:
+                    from .window import switch_to_window
+                    target_hwnd = switch_to_window(target_win)
+                except Exception:
+                    pass
+            elif win_ctx and win_ctx.hwnd and win_ctx.title != "Desktop":
+                target_hwnd = win_ctx.hwnd
+
+            if target_hwnd:
+                try:
+                    from .window import close_window
+                    closed = close_window(target_hwnd)
+                except Exception:
+                    pass
+
+            if not closed:
+                Win32HardwareActuator.hotkey('alt', 'f4')
+            time.sleep(0.35)
+            return {"verified": True, "reason": "Closed window", "type": "HARDWARE"}
 
         elif act_clean in ('stop', 'finish', 'done'):
             print(f"[Actuator] [Stop]: Autonomous task completion requested.")

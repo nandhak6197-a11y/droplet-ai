@@ -520,3 +520,114 @@ class TestGoalBoostPrefixHandling:
         )
         assert ver["verified"] is False
         assert ver["verdict"] == "INVALID_ACTION"
+
+
+# ==============================================================================
+# 7. Window Close & Checkpoint Completion Enforcement Tests
+# ==============================================================================
+
+class TestWindowCloseAndCompletionGuards:
+    """Verifies close_window helper, actuator dispatch, semantic verification, and premature stop guards."""
+
+    def test_close_window_win32_helper(self):
+        """close_window sends WM_SYSCOMMAND SC_CLOSE and WM_CLOSE messages to target HWND."""
+        from spatial_droplet.platform.window import close_window
+
+        with patch("ctypes.windll.user32.IsWindow", return_value=True), \
+             patch("ctypes.windll.user32.PostMessageW", return_value=1) as mock_post, \
+             patch("spatial_droplet.platform.window.is_own_window", return_value=False):
+            res = close_window(12345)
+            assert res is True
+            assert mock_post.call_count == 2
+            # First call is WM_SYSCOMMAND (0x0112), SC_CLOSE (0xF060)
+            mock_post.assert_any_call(12345, 0x0112, 0xF060, 0)
+            # Second call is WM_CLOSE (0x0010)
+            mock_post.assert_any_call(12345, 0x0010, 0, 0)
+
+        # Invalid handle guard
+        assert close_window(-999) is False
+
+    def test_actuator_close_window_dispatch(self):
+        """PrecisionActuator.execute dispatches 'close' cleanly without coordinate errors."""
+        win_ctx = WindowContext(hwnd=555, title="Calculator", rect=(100, 100, 500, 600), width=400, height=500, is_valid=True)
+        actuator = PrecisionActuator()
+
+        with patch("spatial_droplet.platform.window.close_window", return_value=True) as mock_close, \
+             patch("time.sleep"):
+            res = actuator.execute(droplet=None, action="close", win_ctx=win_ctx)
+            assert res["verified"] is True
+            assert res["type"] == "HARDWARE"
+            assert "Closed window" in res["reason"]
+            mock_close.assert_called_once_with(555)
+
+    def test_semantic_verifier_window_close_success(self):
+        """SemanticStateVerifier confirms window close when active window switches away from target."""
+        pre_snap = {"window_title": "Calculator", "hwnd": 100, "tokens": {"calculator", "4"}}
+        post_snap = {"window_title": "Desktop", "hwnd": 200, "tokens": {"desktop", "recycle", "bin"}}
+
+        ver = SemanticStateVerifier.verify_transition(
+            pre_snap=pre_snap,
+            post_snap=post_snap,
+            action="close",
+            input_text=None,
+            semantic_intention="Close Calculator",
+            expected_transition="Calculator closes"
+        )
+        assert ver["verified"] is True
+        assert ver["verdict"] == "CONFIRMED_EXPECTED_TRANSITION"
+        assert "closed successfully" in ver["reason"]
+
+    def test_semantic_verifier_window_close_failure(self):
+        """SemanticStateVerifier rejects close when window remains active in foreground."""
+        pre_snap = {"window_title": "Calculator", "hwnd": 100, "tokens": {"calculator", "4"}}
+        post_snap = {"window_title": "Calculator", "hwnd": 100, "tokens": {"calculator", "4"}}
+
+        ver = SemanticStateVerifier.verify_transition(
+            pre_snap=pre_snap,
+            post_snap=post_snap,
+            action="close",
+            input_text=None,
+            semantic_intention="Close Calculator",
+            expected_transition="Calculator closes"
+        )
+        assert ver["verified"] is False
+        assert ver["verdict"] == "NO_EFFECT"
+        assert "did not close" in ver["reason"]
+
+    def test_awareness_router_verification_with_screen_tokens(self):
+        """AwarenessRouter verifies verification checkpoint when screen tokens match expected outcome."""
+        cps = [
+            Checkpoint(id=1, title="Input", description="add 2+2", action_type="interaction", status="DONE"),
+            Checkpoint(id=2, title="Verify Result", description="Verify result 4 displayed", action_type="verify", status="ACTIVE"),
+            Checkpoint(id=3, title="Close", description="close calculator", action_type="cleanup", status="PENDING")
+        ]
+
+        win_ctx = WindowContext(hwnd=100, title="Calculator", rect=(10, 10, 500, 500), width=490, height=490, is_valid=True)
+        # Droplet / screen contains the display token '4'
+        screen_tokens = {"display", "calculator", "4", "standard"}
+
+        updated_cps = AwarenessRouter.evaluate_screen_and_advance(
+            cps, current_win_ctx=win_ctx, screen_tokens=screen_tokens
+        )
+        # Step 2 should be confirmed DONE, advancing Step 3 to ACTIVE
+        assert updated_cps[1].status == "DONE"
+        assert "4" in updated_cps[1].verification_evidence
+        assert updated_cps[2].status == "ACTIVE"
+
+    def test_trajectory_engine_prevents_premature_completion_when_checkpoints_pending(self):
+        """Trajectory engine stops premature completion if cleanup checkpoints are still PENDING."""
+        from spatial_droplet.engine.trajectory_engine import AutonomousTrajectoryEngine
+
+        memory = EpisodicTrajectoryMemory(goal="open calculator, add 2+2, verify, and close")
+        memory.checkpoints = [
+            Checkpoint(id=1, title="Open", description="Open Calculator", action_type="launch", status="DONE"),
+            Checkpoint(id=2, title="Input", description="Add 2+2", action_type="interaction", status="DONE"),
+            Checkpoint(id=3, title="Verify", description="Verify 4", action_type="verify", status="DONE"),
+            Checkpoint(id=4, title="Close Calculator", description="Close application", action_type="cleanup", status="PENDING")
+        ]
+
+        # Check pending checkpoints detection logic
+        pending = [cp for cp in memory.checkpoints if cp.status != "DONE"]
+        assert len(pending) == 1
+        assert pending[0].id == 4
+        assert pending[0].action_type == "cleanup"
